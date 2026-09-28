@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>the wall — every follower's name, written by hand</title>
+<meta name="description" content="An infinite wall with every follower's name written by hand. Find yours.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #b0a89a;
+    font-family: 'Permanent Marker', cursive;
+    color: #2b2b2b;
+    min-height: 100vh;
+  }
+  body::after {
+    content: "";
+    position: fixed; inset: 0;
+    pointer-events: none;
+    opacity: .35;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.5 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    padding: 18px 22px 14px;
+    background: rgba(176,168,154,.94);
+    border-bottom: 3px solid #2b2b2b;
+  }
+  h1 { margin: 0; font-size: 44px; line-height: 1; }
+  .sub { margin: 6px 0 0; font-size: 20px; color: #4a4438; }
+  .count { font-size: 22px; margin-top: 4px; }
+  .searchrow { display: flex; gap: 10px; margin-top: 12px; max-width: 560px; }
+  #q {
+    flex: 1; font-family: inherit; font-size: 22px;
+    background: transparent; border: none;
+    border-bottom: 3px solid #2b2b2b;
+    padding: 4px 2px; color: #2b2b2b; outline: none;
+  }
+  #q::placeholder { color: #7a7365; }
+  #go {
+    font-family: inherit; font-size: 22px; cursor: pointer;
+    background: #2b2b2b; color: #b0a89a;
+    border: none; padding: 6px 18px;
+    transform: rotate(-1.5deg);
+  }
+  #go:active { transform: rotate(0deg) scale(.97); }
+  #msg { min-height: 28px; font-size: 20px; margin-top: 8px; color: #9a4a3a; }
+  #scaler { width: 1600px; transform-origin: top left; margin: 0 auto; }
+  #wall { position: relative; width: 1600px; }
+  .tag {
+    position: absolute; white-space: nowrap;
+    transform: translate(-50%,-50%) rotate(var(--r));
+    color: var(--c); font-size: var(--s);
+    line-height: 1; padding: 6px 10px;
+  }
+  .tag.found::after {
+    content: ""; position: absolute; inset: -14px -20px;
+    border: 5px solid #9a4a3a; border-radius: 48% 52% 55% 45%;
+    transform: rotate(-4deg); pointer-events: none;
+  }
+  footer {
+    padding: 30px 22px 60px; font-size: 20px; color: #4a4438;
+    max-width: 700px;
+  }
+  footer a { color: #2b2b2b; }
+</style>
+</head>
+<body>
+<header>
+  <h1>the wall</h1>
+  <p class="sub">every follower's name, written by hand.</p>
+  <div class="count"><span id="count">…</span> names so far</div>
+  <div class="searchrow">
+    <input id="q" type="text" placeholder="find your name" autocomplete="off" spellcheck="false">
+    <button id="go">find</button>
+  </div>
+  <div id="msg"></div>
+</header>
+<div id="scaler"><div id="wall"></div></div>
+<footer>
+  <p>follow <a href="https://www.instagram.com/idk_cool_i_guess/">@idk_cool_i_guess</a> and your name gets written on the wall.</p>
+  <p>imsc.bjvfi.com/wall</p>
+</footer>
+<script>
+const COLS = 5, CELL_W = 320, CELL_H = 150, WALL_W = 1600;
+const COLORS = ["#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#9a4a3a","#4a6e6e"];
+
+function hashStr(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function rnd(seed) {
+  let s = seed >>> 0;
+  return function() { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+}
+
+const wall = document.getElementById("wall");
+const tags = [];
+
+fetch("followers.json").then(r => r.json()).then(users => {
+  document.getElementById("count").textContent = users.length;
+  const rows = Math.ceil(users.length / COLS);
+  wall.style.height = (rows * CELL_H) + "px";
+  users.forEach((u, i) => {
+    const row = Math.floor(i / COLS), col = i % COLS;
+    const r = rnd(hashStr(u.username + ":" + i));
+    const jx = (r() - .5) * 60, jy = (r() - .5) * 44;
+    const rot = ((r() - .5) * 16).toFixed(1) + "deg";
+    const color = COLORS[Math.floor(r() * COLORS.length)];
+    const size = Math.round(42 + r() * 18);
+    const el = document.createElement("div");
+    el.className = "tag";
+    el.textContent = "@" + u.username;
+    el.style.left = (col * CELL_W + CELL_W / 2 + jx) / WALL_W * 100 + "%";
+    el.style.top = (row * CELL_H + CELL_H / 2 + jy) + "px";
+    el.style.setProperty("--r", rot);
+    el.style.setProperty("--c", color);
+    el.style.setProperty("--s", size + "px");
+    wall.appendChild(el);
+    tags.push({ name: u.username.toLowerCase(), el });
+  });
+  fit();
+});
+
+function fit() {
+  const s = Math.min(1, document.documentElement.clientWidth / 1600);
+  const scaler = document.getElementById("scaler");
+  scaler.style.transform = "scale(" + s + ")";
+  scaler.style.height = (wall.offsetHeight * s) + "px";
+}
+window.addEventListener("resize", fit);
+
+function find() {
+  const msg = document.getElementById("msg");
+  const q = document.getElementById("q").value.trim().replace(/^@/, "").toLowerCase();
+  document.querySelectorAll(".tag.found").forEach(e => e.classList.remove("found"));
+  if (!q) { msg.textContent = ""; return; }
+  const hit = tags.find(t => t.name === q);
+  if (hit) {
+    msg.textContent = "";
+    hit.el.classList.add("found");
+    hit.el.scrollIntoView({ block: "center", behavior: "smooth" });
+    setTimeout(() => hit.el.classList.remove("found"), 4000);
+  } else {
+    msg.textContent = "not on the wall yet. follow @idk_cool_i_guess and it will be.";
+  }
+}
+document.getElementById("go").addEventListener("click", find);
+document.getElementById("q").addEventListener("keydown", e => { if (e.key === "Enter") find(); });
+</script>
+</body>
+</html>
