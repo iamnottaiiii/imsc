@@ -90,11 +90,13 @@
 import * as THREE from 'three';
 
 const R = 10;                 // globe radius
-const NAME_R = R + 0.18;      // names float just off the surface
+const NAME_R = R + 0.02;      // names sit on the surface
 const SLOTS = 768;            // fibonacci slots, stable as names are appended
 const UP = new THREE.Vector3(0,1,0);
 const PITCH_CLAMP = 1.25;
-const CAM_MIN = 13, CAM_MAX = 60, CAM_HOME = 32;
+const CAM_MIN = 13, CAM_MAX = 60;
+// portrait phones: start close so the globe fills the frame, no dead space below
+const CAM_HOME = (innerWidth/innerHeight < 0.85) ? 21 : 32;
 
 /* ---------- deterministic rand ---------- */
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -115,8 +117,8 @@ function concreteTexture(){
       g.fillStyle=gr;g.beginPath();g.arc(x+ox,y,rad,0,7);g.fill();
     }
   }
-  // fade detail to flat base near the poles: the globe has no visible top
-  const fade=S*0.12;
+  // fade detail to flat base near the poles: the globe has no visible top or bottom
+  const fade=S*0.20;
   let fg=g.createLinearGradient(0,0,0,fade);
   fg.addColorStop(0,`rgba(${BASE[0]},${BASE[1]},${BASE[2]},1)`);
   fg.addColorStop(1,`rgba(${BASE[0]},${BASE[1]},${BASE[2]},0)`);
@@ -127,7 +129,7 @@ function concreteTexture(){
   g.fillStyle=fg;g.fillRect(0,S-fade,S,fade);
   const tex=new THREE.CanvasTexture(c);
   tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
-  tex.repeat.set(6,3);
+  tex.repeat.set(6,1);   // vertical repeat 1: the pole fade lands exactly on the poles
   tex.colorSpace=THREE.SRGBColorSpace;
   return tex;
 }
@@ -273,9 +275,13 @@ async function boot(){
 
   const r=mulberry32(1234);
   const INK='#2b2b2b';
-  let s=1; // skip slot 0 (exact pole)
-  users.forEach(u=>{
-    const d=fibDir(s%SLOTS,SLOTS);s++;
+  // deterministic shuffle of slots 1..SLOTS-2 (skips the exact poles):
+  // names spread over the whole sphere, stable as new names are appended
+  const order=[];for(let i=1;i<SLOTS-1;i++)order.push(i);
+  const sr=mulberry32(99);
+  for(let i=order.length-1;i>0;i--){const j=Math.floor(sr()*(i+1));const t=order[i];order[i]=order[j];order[j]=t;}
+  users.forEach((u,idx)=>{
+    const d=fibDir(order[idx%order.length],SLOTS);
     const mesh=makeName('@'+u.username,INK,0.72+r()*0.26);
     placeName(mesh,d,(r()-0.5)*0.06);
     nameMats.push({mat:mesh.material,base:mesh.material.color.clone()});
