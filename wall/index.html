@@ -224,6 +224,7 @@ const globe=new THREE.Mesh(
 globeGroup.add(globe);
 
 /* soft atmosphere hugging the limb */
+let haloMat, shadowMat;
 {
   const c=document.createElement('canvas');c.width=c.height=256;
   const g=c.getContext('2d');
@@ -233,9 +234,10 @@ globeGroup.add(globe);
   gr.addColorStop(0.88,'rgba(255,248,228,.5)');
   gr.addColorStop(1,'rgba(255,248,228,0)');
   g.fillStyle=gr;g.fillRect(0,0,256,256);
-  const halo=new THREE.Sprite(new THREE.SpriteMaterial({
+  haloMat=new THREE.SpriteMaterial({
     map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false,
-    blending:THREE.AdditiveBlending}));
+    blending:THREE.AdditiveBlending});
+  const halo=new THREE.Sprite(haloMat);
   halo.scale.set(30,30,1);
   halo.position.z=-2;
   scene.add(halo);
@@ -247,16 +249,30 @@ globeGroup.add(globe);
   const gr=g.createRadialGradient(128,128,10,128,128,128);
   gr.addColorStop(0,'rgba(60,50,38,.30)');gr.addColorStop(1,'rgba(60,50,38,0)');
   g.fillStyle=gr;g.fillRect(0,0,256,256);
-  const sh=new THREE.Mesh(new THREE.PlaneGeometry(30,30),
-    new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false}));
+  shadowMat=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false});
+  const sh=new THREE.Mesh(new THREE.PlaneGeometry(30,30),shadowMat);
   sh.rotation.x=-Math.PI/2;sh.position.y=-R-3.4;
   scene.add(sh);
 }
 
 /* ---------- build names ---------- */
 const nameIndex=new Map();
+const nameMats=[];   // {mat, base} for the search spotlight dim
 let glowSprite=null;
+let dim=1,dimTarget=1,dimmedMat=null;
 const qInput=document.getElementById('q');
+
+function applyDim(){
+  const k=0.14+0.86*dim;
+  for(let i=0;i<nameMats.length;i++){
+    const n=nameMats[i];
+    if(n.mat===dimmedMat)n.mat.color.copy(n.base);
+    else n.mat.color.copy(n.base).multiplyScalar(k);
+  }
+  globe.material.color.setScalar(0.22+0.78*dim);
+  haloMat.opacity=dim;
+  shadowMat.opacity=dim;
+}
 
 async function boot(){
   let users=[];
@@ -282,7 +298,8 @@ async function boot(){
     const color=palette[Math.floor(r()*palette.length)];
     const mesh=makeName('@'+u.username,color,0.72+r()*0.26);
     placeName(mesh,d,(r()-0.5)*0.06);
-    nameIndex.set(u.username.toLowerCase(),d.clone());
+    nameMats.push({mat:mesh.material,base:mesh.material.color.clone()});
+    nameIndex.set(u.username.toLowerCase(),{dir:d.clone(),mat:mesh.material});
   });
 
   document.getElementById('loading').style.display='none';
@@ -296,14 +313,19 @@ function clearGlow(){
 function find(){
   const q=qInput.value.trim().replace(/^@/,'').toLowerCase();
   if(!q)return;
-  const d=nameIndex.get(q);
+  const hit=nameIndex.get(q);
   clearGlow();
-  if(!d){
+  dimmedMat=null;
+  if(!hit){
+    dimTarget=1;
     qInput.classList.add('miss');
     qInput.value='';qInput.placeholder='not on the globe yet';
     setTimeout(()=>{qInput.classList.remove('miss');qInput.placeholder='find your name';},2200);
     return;
   }
+  const d=hit.dir;
+  dimmedMat=hit.mat;   // this name stays exactly as it is
+  dimTarget=0;         // everything else goes dark
   const c=document.createElement('canvas');c.width=c.height=128;
   const g=c.getContext('2d');
   const gr=g.createRadialGradient(64,64,4,64,64,64);
@@ -337,7 +359,7 @@ stage.addEventListener('pointerdown',e=>{
     const p=[...pointers.values()];
     pinchD0=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);pinchT0=targetDist;
   }
-  fly=null;clearGlow();
+  fly=null;clearGlow();dimmedMat=null;dimTarget=1;
 });
 stage.addEventListener('pointermove',e=>{
   const p=pointers.get(e.pointerId);
@@ -380,6 +402,11 @@ function tick(){
   }
   globeGroup.rotation.set(pitch,yaw,0);
   camDist+=(targetDist-camDist)*Math.min(1,dt*7);   // buttery zoom
+  if(Math.abs(dim-dimTarget)>0.001||dim!==dimTarget){
+    dim+=(dimTarget-dim)*Math.min(1,dt*4);
+    if(Math.abs(dim-dimTarget)<0.002)dim=dimTarget;
+    applyDim();
+  }
   camera.position.set(0,0,camDist);
   camera.lookAt(0,0,0);
   renderer.render(scene,camera);
