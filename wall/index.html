@@ -133,12 +133,34 @@ function nameTexture(text,color){
   tex.anisotropy=4;
   return {tex,aspect:w/h};
 }
-function makeName(text,color,worldH,roll){
+/* names are curved patches that sit ON the globe, up = toward the north pole */
+const UP=new THREE.Vector3(0,1,0);
+function makeName(text,color,worldH){
   const {tex,aspect}=nameTexture(text,color);
-  const mat=new THREE.SpriteMaterial({map:tex,transparent:true,rotation:roll});
-  const sp=new THREE.Sprite(mat);
-  sp.scale.set(worldH*aspect,worldH,1);
-  return sp;
+  const wWorld=Math.min(worldH*aspect,1.0);   // width cap keeps real gaps
+  const h=wWorld/aspect;
+  const segs=Math.max(8,Math.round(wWorld*2.5));
+  const geo=new THREE.PlaneGeometry(wWorld,h,segs,1);
+  const pos=geo.attributes.position;
+  for(let i=0;i<pos.count;i++){
+    const x=pos.getX(i),y=pos.getY(i);
+    const th=x/NAME_R;
+    pos.setXYZ(i,NAME_R*Math.sin(th),y,NAME_R*(Math.cos(th)-1)); // bent back to hug the ball
+  }
+  geo.computeVertexNormals();
+  return new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:tex,transparent:true,side:THREE.DoubleSide}));
+}
+const _bx=new THREE.Vector3(),_by=new THREE.Vector3(),_bz=new THREE.Vector3(),_bm=new THREE.Matrix4();
+function placeName(mesh,dir,roll){
+  _bz.copy(dir).normalize();                                   // outward
+  _by.copy(UP).addScaledVector(_bz,-UP.dot(_bz));              // toward north pole
+  if(_by.lengthSq()<1e-6)_by.set(0,0,-1);else _by.normalize();
+  _bx.crossVectors(_by,_bz).normalize();
+  _bm.makeBasis(_bx,_by,_bz);
+  mesh.quaternion.setFromRotationMatrix(_bm);
+  mesh.rotateZ(roll);                                           // slight hand-tilt in the tangent plane
+  mesh.position.copy(_bz).multiplyScalar(NAME_R);
+  globeGroup.add(mesh);
 }
 
 /* ---------- fibonacci sphere ---------- */
@@ -201,9 +223,9 @@ globeGroup.add(globe);
 
 /* ---------- state ---------- */
 let yaw=0.6,pitch=0.25;                 // globe spin
-const PITCH_CLAMP=1.5;
-let vyaw=0,vpitch=0;                    // inertia
-let dragging=false,lastInteract=0;
+const PITCH_CLAMP=1.35;
+let vyaw=0,vpitch=0;                    // flick inertia
+let dragging=false,drift=true,lastInteract=0;
 let fly=null;                           // search flight {from,to,t}
 const nameIndex=new Map();
 let glowSprite=null;
@@ -234,15 +256,9 @@ async function boot(){
   users.forEach(u=>{
     const d=fibDir(s%SLOTS,SLOTS);s++;
     const color=palette[Math.floor(r()*palette.length)];
-    let h=0.62+r()*0.22;
-    const px=64,pad=18;
-    measureCtx.font=px+'px "Permanent Marker"';
-    const aspect=(measureCtx.measureText('@'+u.username).width+pad*2)/(px+pad*2);
-    let w=h*aspect;
-    if(w>1.0){w=1.0;h=1.0/aspect;}      // width cap keeps real gaps
-    const sp=makeName('@'+u.username,color,h,(r()-0.5)*0.10);
-    sp.position.copy(d).multiplyScalar(NAME_R);
-    globeGroup.add(sp);
+    const h=0.70+r()*0.25;
+    const mesh=makeName('@'+u.username,color,h);
+    placeName(mesh,d,(r()-0.5)*0.06);
     nameIndex.set(u.username.toLowerCase(),d.clone());
   });
 
@@ -297,7 +313,7 @@ let pinchD0=0,camD0=26;
 stage.addEventListener('pointerdown',e=>{
   stage.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  if(pointers.size===1){dragging=true;vyaw=vpitch=0;}
+  if(pointers.size===1){dragging=true;drift=false;vyaw=vpitch=0;}
   if(pointers.size===2){
     const p=[...pointers.values()];
     pinchD0=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);camD0=camDist;
@@ -310,8 +326,9 @@ stage.addEventListener('pointermove',e=>{
   const dx=e.clientX-p.x,dy=e.clientY-p.y;
   p.x=e.clientX;p.y=e.clientY;
   if(pointers.size===1&&dragging){
-    vyaw=-dx*0.005;vpitch=-dy*0.005;
-    yaw+=vyaw;pitch=Math.max(-PITCH_CLAMP,Math.min(PITCH_CLAMP,pitch+vpitch));
+    const ddx=-dx*0.005,ddy=-dy*0.005;
+    yaw+=ddx;pitch=Math.max(-PITCH_CLAMP,Math.min(PITCH_CLAMP,pitch+ddy));
+    vyaw=vyaw*0.65+ddx*0.35;vpitch=vpitch*0.65+ddy*0.35;   // smoothed flick
   }else if(pointers.size===2){
     const q=[...pointers.values()];
     const d=Math.hypot(q[0].x-q[1].x,q[0].y-q[1].y);
@@ -349,8 +366,11 @@ function tick(){
   }else{
     if(!dragging){
       yaw+=vyaw;pitch=Math.max(-PITCH_CLAMP,Math.min(PITCH_CLAMP,pitch+vpitch));
-      vyaw*=0.95;vpitch*=0.95;                       // inertia
-      if(now-lastInteract>4000)yaw+=dt*0.06;          // idle slow spin
+      const dec=Math.exp(-3.5*dt);                     // time-based flick decay
+      vyaw*=dec;vpitch*=dec;
+      if(Math.abs(vyaw)<1e-5)vyaw=0;
+      if(Math.abs(vpitch)<1e-5)vpitch=0;
+      if(drift)yaw+=dt*0.05;                           // gentle drift until first touch
     }
     globeGroup.rotation.set(pitch,yaw,0);
   }
