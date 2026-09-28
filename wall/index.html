@@ -93,6 +93,7 @@ const R = 10;                 // globe radius
 const NAME_R = R + 0.02;      // names sit on the surface
 const SLOTS = 768;            // fibonacci slots, stable as names are appended
 const UP = new THREE.Vector3(0,1,0);
+const INK = '#2b2b2b';
 const CAM_MIN = 13, CAM_MAX = 60;
 // portrait phones: start close so the globe fills the frame, no dead space below
 const CAM_HOME = (innerWidth/innerHeight < 0.85) ? 21 : 32;
@@ -141,19 +142,24 @@ function nameTexture(text,color){
   const w=Math.ceil(measureCtx.measureText(text).width)+pad*2;
   const h=px+pad*2;
   const c=document.createElement('canvas');c.width=w;c.height=h;
-  const g=c.getContext('2d');
-  g.font=px+'px "Permanent Marker"';
-  g.textBaseline='middle';
-  g.shadowColor='rgba(60,50,38,.35)';g.shadowBlur=3;g.shadowOffsetY=2;
-  g.fillStyle=color;
-  g.fillText(text,pad,h/2+2);
   const tex=new THREE.CanvasTexture(c);
   tex.colorSpace=THREE.SRGBColorSpace;
   tex.anisotropy=4;
-  return {tex,aspect:w/h};
+  function draw(col){
+    const g=c.getContext('2d');
+    g.clearRect(0,0,w,h);
+    g.font=px+'px "Permanent Marker"';
+    g.textBaseline='middle';
+    g.shadowColor='rgba(60,50,38,.35)';g.shadowBlur=3;g.shadowOffsetY=2;
+    g.fillStyle=col;
+    g.fillText(text,pad,h/2+2);
+    tex.needsUpdate=true;
+  }
+  draw(color);
+  return {tex,aspect:w/h,redraw:draw};
 }
 function makeName(text,color,worldH){
-  const {tex,aspect}=nameTexture(text,color);
+  const {tex,aspect,redraw}=nameTexture(text,color);
   const wWorld=Math.min(worldH*aspect,1.0);   // width cap keeps real gaps
   const h=wWorld/aspect;
   const segs=Math.max(8,Math.round(wWorld*2.5));
@@ -165,7 +171,9 @@ function makeName(text,color,worldH){
     pos.setXYZ(i,NAME_R*Math.sin(th),y,NAME_R*(Math.cos(th)-1));
   }
   geo.computeVertexNormals();
-  return new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:tex,transparent:true,side:THREE.DoubleSide}));
+  const mesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:tex,transparent:true,side:THREE.DoubleSide}));
+  mesh.userData.redraw=redraw;
+  return mesh;
 }
 const _bx=new THREE.Vector3(),_by=new THREE.Vector3(),_bz=new THREE.Vector3(),_bm=new THREE.Matrix4();
 const _v=new THREE.Vector3();
@@ -284,7 +292,6 @@ async function boot(){
   try{await document.fonts.load('64px "Permanent Marker"');}catch(e){}
 
   const r=mulberry32(1234);
-  const INK='#2b2b2b';
   // deterministic shuffle of slots 1..SLOTS-2 (skips the exact poles):
   // names spread over the whole sphere, stable as new names are appended
   const order=[];for(let i=1;i<SLOTS-1;i++)order.push(i);
@@ -295,7 +302,7 @@ async function boot(){
     const mesh=makeName('@'+u.username,INK,0.72+r()*0.26);
     placeName(mesh,d);
     nameMats.push({mat:mesh.material,base:mesh.material.color.clone()});
-    nameIndex.set(u.username.toLowerCase(),{dir:d.clone(),mat:mesh.material});
+    nameIndex.set(u.username.toLowerCase(),{dir:d.clone(),mat:mesh.material,mesh});
   });
 
   document.getElementById('loading').style.display='none';
@@ -303,10 +310,15 @@ async function boot(){
 }
 
 /* ---------- search ---------- */
+let litMesh=null;   // the found name, drawn white while the globe is dark
+function unlight(){
+  if(litMesh){litMesh.userData.redraw(INK);litMesh=null;}
+}
 function find(){
   const q=qInput.value.trim().replace(/^@/,'').toLowerCase();
   if(!q)return;
   const hit=nameIndex.get(q);
+  unlight();
   dimmedMat=null;
   if(!hit){
     dimTarget=1;
@@ -316,7 +328,9 @@ function find(){
     return;
   }
   const d=hit.dir;
-  dimmedMat=hit.mat;   // this name stays exactly as it is, no extra light on it
+  dimmedMat=hit.mat;   // this name stays lit while everything else goes dark
+  litMesh=hit.mesh;
+  litMesh.userData.redraw('#ffffff');   // the searched name shows white
   dimTarget=0.25;      // the rest of the globe goes dark for the spotlight
   // fly the viewpoint to the name and zoom in to read it
   const pt=Math.atan2(d.y,d.z);
@@ -340,7 +354,7 @@ stage.addEventListener('pointerdown',e=>{
     const p=[...pointers.values()];
     pinchD0=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);pinchT0=targetDist;
   }
-  fly=null;dimmedMat=null;dimTarget=1;
+  fly=null;unlight();dimmedMat=null;dimTarget=1;
 });
 stage.addEventListener('pointermove',e=>{
   const p=pointers.get(e.pointerId);
