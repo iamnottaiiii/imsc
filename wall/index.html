@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>the wall — every follower's name, written by hand</title>
 <meta name="description" content="An infinite 3D wall with every follower's name written by hand. Find yours.">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap" rel="stylesheet">
@@ -25,7 +27,10 @@
     padding: 16px 18px 0;
     pointer-events: none;
     text-shadow: 0 1px 0 rgba(255,255,255,.28);
+    transition: opacity .5s ease;
   }
+  header.gone { opacity: 0; }
+  header.gone .searchrow, header.gone .cta { pointer-events: none; }
   header h1 { margin: 0; font-size: 34px; line-height: 1; }
   header .sub { margin: 4px 0 0; font-size: 17px; color: #4a4438; }
   header .searchrow { display: flex; gap: 8px; margin-top: 8px; max-width: 340px; pointer-events: auto; }
@@ -108,6 +113,7 @@ const tilt={x:0,y:0,tx:0,ty:0};
 const bounds={minX:-40,maxX:40,minY:-600,maxY:16};
 const stage=document.getElementById('stage');
 const spotEl=document.getElementById('spot');
+const headerEl=document.querySelector('header');
 const v3=new THREE.Vector3();
 
 boot().catch(()=>{document.getElementById('fallback').style.display='flex';document.getElementById('loading').style.display='none';});
@@ -332,6 +338,8 @@ function tick(){
     if(Math.abs(camTarget.x-cam.x)<0.05&&Math.abs(camTarget.y-cam.y)<0.05&&Math.abs(camTarget.z-cam.z)<0.05)camTarget=null;
   }
   tilt.x+=(tilt.tx-tilt.x)*0.05; tilt.y+=(tilt.ty-tilt.y)*0.05;
+  // the search ui lives at the top of the wall; drag down past it and it gets out of the way
+  headerEl.classList.toggle('gone', cam.y < bounds.maxY - 34);
   camera.position.set(cam.x,cam.y,cam.z);
   camera.lookAt(cam.x,cam.y,0);
   camera.rotateX(tilt.y*0.022);
