@@ -98,19 +98,14 @@ function concreteTexture(){
   const g=c.getContext('2d');
   g.fillStyle='#c3b8a4';g.fillRect(0,0,S,S);
   const r=mulberry32(7);
-  for(let i=0;i<900;i++){ // soft blotches, tileable in x
+  for(let i=0;i<1100;i++){ // soft blotches, tileable in x; no fine speckle so the poles stay seamless
     const x=r()*S,y=r()*S,rad=20+r()*90,dark=r()>0.5;
     for(const ox of [-S,0,S]){
       const gr=g.createRadialGradient(x+ox,y,0,x+ox,y,rad);
-      gr.addColorStop(0,dark?'rgba(128,114,96,0.035)':'rgba(222,212,190,0.035)');
+      gr.addColorStop(0,dark?'rgba(128,114,96,0.03)':'rgba(222,212,190,0.03)');
       gr.addColorStop(1,'rgba(0,0,0,0)');
       g.fillStyle=gr;g.beginPath();g.arc(x+ox,y,rad,0,7);g.fill();
     }
-  }
-  for(let i=0;i<5200;i++){ // speckle
-    const x=r()*S,y=r()*S,dark=r()>0.5;
-    g.fillStyle=dark?'rgba(90,80,66,0.10)':'rgba(235,228,210,0.10)';
-    g.fillRect(x,y,1.4,1.4);
   }
   const tex=new THREE.CanvasTexture(c);
   tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
@@ -219,11 +214,17 @@ function markInteract(){lastInteract=performance.now();}
 /* ---------- build ---------- */
 async function boot(){
   let users=[];
-  try{
-    const res=await fetch('followers.json?v='+Date.now());
-    if(res.ok){const j=await res.json();users=j.followers||[];}
-  }catch(e){}
-  document.getElementById('count').textContent=users.length;
+  for(let attempt=0;attempt<3 && !users.length;attempt++){
+    try{
+      const res=await fetch('followers.json?v='+Date.now());
+      if(res.ok){
+        const j=await res.json();
+        users=Array.isArray(j)?j:(j.followers||[]);
+      }
+    }catch(e){}
+    if(!users.length&&attempt<2)await new Promise(r=>setTimeout(r,800));
+  }
+  document.getElementById('count').textContent=users.length?users.length:'could not load';
 
   try{await document.fonts.load('64px "Permanent Marker"');}catch(e){}
 
