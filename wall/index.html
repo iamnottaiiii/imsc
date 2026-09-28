@@ -183,20 +183,21 @@ function nameTexture(text,color){
   return {tex:t,aspect:c.width/c.height};
 }
 
-function wallText(text,color,worldH){
+/* names are curved to hug the globe, so long names never clip through the wall */
+function curvedName(text,color,worldH){
   const {tex,aspect}=nameTexture(text,color);
-  const m=new THREE.Mesh(
-    new THREE.PlaneGeometry(worldH*aspect,worldH),
-    new THREE.MeshBasicMaterial({map:tex,transparent:true})
-  );
-  return m;
-}
-function placeOnWall(mesh,theta,y){
-  const rr=R-0.4;
-  mesh.position.set(rr*Math.sin(theta),y,rr*Math.cos(theta));
-  mesh.lookAt(0,y,0);
-  scene.add(mesh);
-  return mesh;
+  const wWorld=worldH*aspect;
+  const segs=Math.max(8,Math.round(wWorld*2));
+  const geo=new THREE.PlaneGeometry(wWorld,worldH,segs,1);
+  const pos=geo.attributes.position;
+  const rn=R-0.4;
+  for(let i=0;i<pos.count;i++){
+    const x=pos.getX(i),y=pos.getY(i);
+    const th=x/rn;
+    pos.setXYZ(i,rn*Math.sin(th),y,rn*Math.cos(th));
+  }
+  geo.computeVertexNormals();
+  return new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:tex,transparent:true}));
 }
 
 function buildWorld(users){
@@ -213,9 +214,9 @@ function buildWorld(users){
     if(x+wWorld>CIRC-MARGIN&&x>MARGIN){y-=(rowH+ROW_GAP);x=MARGIN;rowH=0;}
     const theta=(x+wWorld/2)/R+(r()-0.5)*0.9/R;
     const yy=y+(r()-0.5)*0.8;
-    const m=wallText('@'+u.username,color,hWorld);
-    placeOnWall(m,theta,yy);
-    m.rotateZ((r()-0.5)*0.10);
+    const m=curvedName('@'+u.username,color,hWorld);
+    m.rotation.y=theta;m.position.y=yy;m.rotateZ((r()-0.5)*0.10);
+    scene.add(m);
     nameIndex.set(u.username.toLowerCase(),{mesh:m,theta,y:yy});
     x+=wWorld+COL_GAP;rowH=Math.max(rowH,hWorld);
   });
@@ -230,13 +231,13 @@ function buildWorld(users){
   globe.position.y=(topY+botY)/2;
   scene.add(globe);
 
-  const title=wallText('the globe','#2b2b2b',5);
-  placeOnWall(title,0.55,topY-4);title.rotateZ(-0.02);
+  const title=curvedName('the globe','#2b2b2b',5);
+  title.rotation.y=0.55;title.position.y=topY-4;title.rotateZ(-0.02);scene.add(title);
 
-  const cta1=wallText('follow @idk_cool_i_guess','#2b2b2b',3.4);
-  placeOnWall(cta1,0.55,botY+9);cta1.rotateZ(0.015);
-  const cta2=wallText('get your name on the globe','#9a4a3a',3.0);
-  placeOnWall(cta2,0.55,botY+5);cta2.rotateZ(-0.02);
+  const cta1=curvedName('follow @idk_cool_i_guess','#2b2b2b',3.4);
+  cta1.rotation.y=0.55;cta1.position.y=botY+9;cta1.rotateZ(0.015);scene.add(cta1);
+  const cta2=curvedName('get your name on the globe','#9a4a3a',3.0);
+  cta2.rotation.y=0.55;cta2.position.y=botY+5;cta2.rotateZ(-0.02);scene.add(cta2);
 
   camY=topY-11;view=0.55;
 }
@@ -301,8 +302,8 @@ function setupSearch(){
       scene.add(glowSprite);
     }
     glowSprite.visible=true;
-    const rr=(R-0.15)/R;   // light sits behind the name, haloing it without covering it
-    glowSprite.position.set(e.mesh.position.x*rr,e.mesh.position.y,e.mesh.position.z*rr);
+    // light sits on the wall just behind the name, haloing it without covering it
+    glowSprite.position.set((R-0.15)*Math.sin(e.theta),e.y,(R-0.15)*Math.cos(e.theta));
     glowSprite.scale.set(8,9.5,1);
   };
   document.getElementById('go').addEventListener('click',go);
