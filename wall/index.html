@@ -93,7 +93,6 @@ const R = 10;                 // globe radius
 const NAME_R = R + 0.02;      // names sit on the surface
 const SLOTS = 768;            // fibonacci slots, stable as names are appended
 const UP = new THREE.Vector3(0,1,0);
-const PITCH_CLAMP = 1.25;
 const CAM_MIN = 13, CAM_MAX = 60;
 // portrait phones: start close so the globe fills the frame, no dead space below
 const CAM_HOME = (innerWidth/innerHeight < 0.85) ? 21 : 32;
@@ -169,16 +168,28 @@ function makeName(text,color,worldH){
   return new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:tex,transparent:true,side:THREE.DoubleSide}));
 }
 const _bx=new THREE.Vector3(),_by=new THREE.Vector3(),_bz=new THREE.Vector3(),_bm=new THREE.Matrix4();
-function placeName(mesh,dir,roll){
-  _bz.copy(dir).normalize();
-  _by.copy(UP).addScaledVector(_bz,-UP.dot(_bz));
-  if(_by.lengthSq()<1e-6)_by.set(0,0,-1);else _by.normalize();
-  _bx.crossVectors(_by,_bz).normalize();
-  _bm.makeBasis(_bx,_by,_bz);
-  mesh.quaternion.setFromRotationMatrix(_bm);
-  mesh.rotateZ(roll);
-  mesh.position.copy(_bz).multiplyScalar(NAME_R);
-  globeGroup.add(mesh);
+const _v=new THREE.Vector3();
+// names live in world space; every frame they are pinned to their globe spot
+// but rotated so they always read upright on screen, no matter how you spin it
+const names=[];
+function placeName(mesh,dir){
+  mesh.position.copy(dir).multiplyScalar(NAME_R);
+  scene.add(mesh);
+  names.push({mesh,dir:dir.clone()});
+}
+function uprightNames(){
+  const gq=globeGroup.quaternion;
+  for(let i=0;i<names.length;i++){
+    const n=names[i];
+    _v.copy(n.dir).applyQuaternion(gq);
+    n.mesh.position.copy(_v).multiplyScalar(NAME_R);
+    _bz.copy(_v);
+    _by.copy(UP).addScaledVector(_bz,-UP.dot(_bz));
+    if(_by.lengthSq()<1e-6)_by.set(1,0,0);else _by.normalize();
+    _bx.crossVectors(_by,_bz).normalize();
+    _bm.makeBasis(_bx,_by,_bz);
+    n.mesh.quaternion.setFromRotationMatrix(_bm);
+  }
 }
 
 /* ---------- fibonacci sphere ---------- */
@@ -242,7 +253,6 @@ let shadowMat;
 /* ---------- build names ---------- */
 const nameIndex=new Map();
 const nameMats=[];   // {mat, base} for the search spotlight dim
-let glowSprite=null;
 let dim=1,dimTarget=1,dimmedMat=null;
 const qInput=document.getElementById('q');
 
@@ -283,7 +293,7 @@ async function boot(){
   users.forEach((u,idx)=>{
     const d=fibDir(order[idx%order.length],SLOTS);
     const mesh=makeName('@'+u.username,INK,0.72+r()*0.26);
-    placeName(mesh,d,(r()-0.5)*0.06);
+    placeName(mesh,d);
     nameMats.push({mat:mesh.material,base:mesh.material.color.clone()});
     nameIndex.set(u.username.toLowerCase(),{dir:d.clone(),mat:mesh.material});
   });
@@ -293,14 +303,10 @@ async function boot(){
 }
 
 /* ---------- search ---------- */
-function clearGlow(){
-  if(glowSprite){globeGroup.remove(glowSprite);glowSprite=null;}
-}
 function find(){
   const q=qInput.value.trim().replace(/^@/,'').toLowerCase();
   if(!q)return;
   const hit=nameIndex.get(q);
-  clearGlow();
   dimmedMat=null;
   if(!hit){
     dimTarget=1;
@@ -310,26 +316,15 @@ function find(){
     return;
   }
   const d=hit.dir;
-  dimmedMat=hit.mat;   // this name stays exactly as it is
-  dimTarget=0;         // everything else goes dark
-  const c=document.createElement('canvas');c.width=c.height=128;
-  const g=c.getContext('2d');
-  const gr=g.createRadialGradient(64,64,4,64,64,64);
-  gr.addColorStop(0,'rgba(255,244,214,.95)');gr.addColorStop(1,'rgba(255,244,214,0)');
-  g.fillStyle=gr;g.fillRect(0,0,128,128);
-  const glow=new THREE.Sprite(new THREE.SpriteMaterial({
-    map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false}));
-  glow.scale.set(3.6,3.6,1);
-  glow.position.copy(d).multiplyScalar(R+0.05);
-  globeGroup.add(glow);
-  glowSprite=glow;
+  dimmedMat=hit.mat;   // this name stays exactly as it is, no extra light on it
+  dimTarget=0.68;      // everything else darkens just a little
   // fly the viewpoint to the name and zoom in to read it
   const pt=Math.atan2(d.y,d.z);
   const d1=d.clone().applyEuler(new THREE.Euler(pt,0,0,'YXZ'));
   const yt=Math.atan2(-d1.x,d1.z);
   let dyaw=yt-yaw;
   dyaw=Math.atan2(Math.sin(dyaw),Math.cos(dyaw));
-  const pc=Math.max(-PITCH_CLAMP,Math.min(PITCH_CLAMP,pt));
+  const pc=pt+Math.round((pitch-pt)/(2*Math.PI))*2*Math.PI;  // nearest spin, no top/bottom wall
   fly={yaw0:yaw,dyaw,pitch0:pitch,dpitch:pc-pitch,dist0:targetDist,ddist:17-targetDist,t:0};
 }
 document.getElementById('go').addEventListener('click',find);
@@ -345,7 +340,7 @@ stage.addEventListener('pointerdown',e=>{
     const p=[...pointers.values()];
     pinchD0=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);pinchT0=targetDist;
   }
-  fly=null;clearGlow();dimmedMat=null;dimTarget=1;
+  fly=null;dimmedMat=null;dimTarget=1;
 });
 stage.addEventListener('pointermove',e=>{
   const p=pointers.get(e.pointerId);
@@ -354,9 +349,10 @@ stage.addEventListener('pointermove',e=>{
   p.x=e.clientX;p.y=e.clientY;
   if(pointers.size===1){
     // 1:1 grab: the point under your finger follows it, scaled so close-ups track right
+    // no top/bottom wall: pitch spins freely, every direction works
     const k=0.0042*(targetDist/CAM_HOME);
     yaw+=dx*k;
-    pitch=Math.max(-PITCH_CLAMP,Math.min(PITCH_CLAMP,pitch+dy*k));
+    pitch+=dy*k;
   }else if(pointers.size===2){
     const q=[...pointers.values()];
     const d=Math.hypot(q[0].x-q[1].x,q[0].y-q[1].y);
@@ -387,6 +383,7 @@ function tick(){
     if(fly.t>=1)fly=null;
   }
   globeGroup.rotation.set(pitch,yaw,0);
+  uprightNames();   // names stay readable, always upright on screen
   camDist+=(targetDist-camDist)*Math.min(1,dt*7);   // buttery zoom
   if(Math.abs(dim-dimTarget)>0.001||dim!==dimTarget){
     dim+=(dimTarget-dim)*Math.min(1,dt*4);
