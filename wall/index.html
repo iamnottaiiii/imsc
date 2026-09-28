@@ -110,6 +110,7 @@ let renderer, scene, camera, maxAniso=4;
 const nameIndex=new Map();
 let view=0.6, camY=0, fov=60;       // view = wall angle looked at (wraps forever)
 let viewTarget=null, yTarget=null, fovTarget=null;
+let dragging=false, viewVel=0, yVel=0;
 let spotlight=null, glowSprite=null;
 let topY=8, botY=-200;
 const stage=document.getElementById('stage');
@@ -133,7 +134,7 @@ async function boot(){
 
   scene=new THREE.Scene();
   scene.background=new THREE.Color(WALL_COLOR);
-  scene.fog=new THREE.Fog(WALL_COLOR,R*1.6,R*4.5);
+  scene.fog=new THREE.Fog(WALL_COLOR,R*2.4,R*6);
   fov=(innerWidth/innerHeight)<0.8?70:58;
   camera=new THREE.PerspectiveCamera(fov,innerWidth/innerHeight,0.1,600);
 
@@ -253,7 +254,7 @@ function setupControls(){
   el.addEventListener('pointerdown',e=>{
     el.setPointerCapture(e.pointerId);
     pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
-    viewTarget=null;
+    viewTarget=null;dragging=true;viewVel=0;yVel=0;
   });
   el.addEventListener('pointermove',e=>{
     if(!pts.has(e.pointerId))return;
@@ -262,8 +263,9 @@ function setupControls(){
     p.x=e.clientX;p.y=e.clientY;
     if(pts.size===1){
       viewTarget=null;yTarget=null;
-      view-=dx*0.0052;                       // spin around the globe (wraps forever)
-      camY=clamp(camY+dy*(R*0.0016),botY+8,topY+2);
+      viewVel=-dx*0.0052;yVel=dy*0.08;   // flick to keep spinning / traveling
+      view+=viewVel;                       // spin around the globe (wraps forever)
+      camY=clamp(camY+yVel,botY+8,topY+2);
     }else if(pts.size===2){
       const a=[...pts.values()];
       const d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
@@ -271,7 +273,7 @@ function setupControls(){
       lastPinch=d;
     }
   });
-  const up=e=>{pts.delete(e.pointerId);if(pts.size<2)lastPinch=0;};
+  const up=e=>{pts.delete(e.pointerId);if(pts.size<2)lastPinch=0;if(pts.size===0)dragging=false;};
   el.addEventListener('pointerup',up);
   el.addEventListener('pointercancel',up);
   el.addEventListener('wheel',e=>{
@@ -290,6 +292,7 @@ function setupSearch(){
     if(!e){msg.textContent='not on the globe yet. follow @idk_cool_i_guess to be added.';return;}
     msg.textContent='';
     spotlight=e;
+    viewVel=0;yVel=0;
     let d=((e.theta-view+Math.PI*3)%(Math.PI*2))-Math.PI;   // shortest spin
     viewTarget=view+d;yTarget=e.y;fovTarget=55;
     spotEl.classList.add('on');
@@ -337,6 +340,13 @@ function tick(){
     fov+=(fovTarget-fov)*0.12;
     camera.fov=fov;camera.updateProjectionMatrix();
     if(Math.abs(fovTarget-fov)<0.1)fovTarget=null;
+  }
+  if(!dragging&&viewTarget===null){          // flick momentum after release
+    if(Math.abs(viewVel)>0.0002){view+=viewVel;viewVel*=0.94;}
+    if(Math.abs(yVel)>0.005){
+      const ny=clamp(camY+yVel,botY+8,topY+2);
+      if(ny!==camY){camY=ny;yVel*=0.94;}else yVel=0;
+    }
   }
   headerEl.classList.toggle('gone',camY<topY-26);
   camera.position.set(0,camY,0);
