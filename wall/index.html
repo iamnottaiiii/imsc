@@ -317,7 +317,7 @@ function find(){
   }
   const d=hit.dir;
   dimmedMat=hit.mat;   // this name stays exactly as it is, no extra light on it
-  dimTarget=0.68;      // everything else darkens just a little
+  dimTarget=0.25;      // the rest of the globe goes dark for the spotlight
   // fly the viewpoint to the name and zoom in to read it
   const pt=Math.atan2(d.y,d.z);
   const d1=d.clone().applyEuler(new THREE.Euler(pt,0,0,'YXZ'));
