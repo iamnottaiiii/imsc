@@ -50,11 +50,6 @@
   #msg { min-height: 24px; font-size: 16px; margin-top: 4px; color: #8a3d2e; max-width: 340px; }
   header .cta { margin: 2px 0 0; font-size: 15px; color: #4a4438; pointer-events: auto; }
   header .cta a { color: #2b2b2b; }
-  #spot {
-    position: fixed; inset: 0; z-index: 15;
-    pointer-events: none; opacity: 0; transition: opacity .35s ease;
-  }
-  #spot.on { opacity: 1; pointer-events: auto; }
   #hint {
     position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%) rotate(-1deg);
     z-index: 30; font-size: 18px; color: #4a4438; pointer-events: none;
@@ -75,7 +70,6 @@
 </head>
 <body>
 <div id="stage"></div>
-<div id="spot"></div>
 <header>
   <h1>the globe</h1>
   <p class="sub">I made a globe for all my followers. <span id="count">…</span> names so far.</p>
@@ -114,7 +108,6 @@ let dragging=false, viewVel=0, yVel=0;
 let spotlight=null, glowSprite=null;
 let topY=8, botY=-200;
 const stage=document.getElementById('stage');
-const spotEl=document.getElementById('spot');
 const headerEl=document.querySelector('header');
 const v3=new THREE.Vector3();
 
@@ -254,7 +247,7 @@ function setupControls(){
   el.addEventListener('pointerdown',e=>{
     el.setPointerCapture(e.pointerId);
     pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
-    viewTarget=null;dragging=true;viewVel=0;yVel=0;
+    viewTarget=null;dragging=true;viewVel=0;yVel=0;clearSpot();
   });
   el.addEventListener('pointermove',e=>{
     if(!pts.has(e.pointerId))return;
@@ -295,33 +288,30 @@ function setupSearch(){
     viewVel=0;yVel=0;
     let d=((e.theta-view+Math.PI*3)%(Math.PI*2))-Math.PI;   // shortest spin
     viewTarget=view+d;yTarget=e.y;fovTarget=55;
-    spotEl.classList.add('on');
     if(!glowSprite){
       const c=document.createElement('canvas');c.width=c.height=256;
       const g=c.getContext('2d');
       const gr=g.createRadialGradient(128,128,8,128,128,128);
-      gr.addColorStop(0,'rgba(255,252,238,1)');
-      gr.addColorStop(0.22,'rgba(255,246,214,0.9)');
-      gr.addColorStop(0.5,'rgba(255,240,200,0.38)');
-      gr.addColorStop(1,'rgba(255,240,200,0)');
+      gr.addColorStop(0,'rgba(255,250,230,0.9)');
+      gr.addColorStop(0.35,'rgba(255,244,210,0.4)');
+      gr.addColorStop(1,'rgba(255,244,210,0)');
       g.fillStyle=gr;g.fillRect(0,0,256,256);
       const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
       glowSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
       scene.add(glowSprite);
     }
     glowSprite.visible=true;
-    const rr=(R-1.4)/R;
+    const rr=(R-0.15)/R;   // light sits behind the name, haloing it without covering it
     glowSprite.position.set(e.mesh.position.x*rr,e.mesh.position.y,e.mesh.position.z*rr);
-    glowSprite.scale.set(9,11,1);
+    glowSprite.scale.set(8,9.5,1);
   };
   document.getElementById('go').addEventListener('click',go);
   input.addEventListener('keydown',e=>{if(e.key==='Enter')go();});
   input.addEventListener('input',()=>{if(!input.value)clearSpot();});
-  spotEl.addEventListener('click',clearSpot);
   addEventListener('keydown',e=>{if(e.key==='Escape')clearSpot();});
 }
 function clearSpot(){
-  spotlight=null;spotEl.classList.remove('on');
+  spotlight=null;
   if(glowSprite)glowSprite.visible=false;
 }
 
@@ -351,15 +341,9 @@ function tick(){
   headerEl.classList.toggle('gone',camY<topY-26);
   camera.position.set(0,camY,0);
   camera.rotation.set(0,view+Math.PI,0);
-  if(spotlight){
-    v3.copy(spotlight.mesh.position).project(camera);
-    const sx=(v3.x*0.5+0.5)*innerWidth,sy=(-v3.y*0.5+0.5)*innerHeight;
-    spotEl.style.background=
-      `radial-gradient(circle 130px at ${sx.toFixed(1)}px ${sy.toFixed(1)}px, rgba(0,0,0,0) 0, rgba(0,0,0,0) 122px, rgba(255,242,205,0.8) 146px, rgba(255,242,205,0.14) 178px, rgba(13,10,7,0.94) 245px)`;
-    if(glowSprite){
-      const p=1+Math.sin(t*4.5)*0.08;
-      glowSprite.scale.set(9*p,11*p,1);
-    }
+  if(spotlight&&glowSprite){
+    const p=1+Math.sin(t*4.5)*0.06;
+    glowSprite.scale.set(8*p,9.5*p,1);
   }
   renderer.render(scene,camera);
 }
