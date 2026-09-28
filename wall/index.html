@@ -204,7 +204,7 @@ function curvedName(text,color,worldH){
   for(let i=0;i<pos.count;i++){
     const x=pos.getX(i),y=pos.getY(i);
     const th=x/rn;
-    pos.setXYZ(i,rn*Math.sin(th),y,rn*Math.cos(th));
+    pos.setXYZ(i,rn*Math.sin(th),y,rn*(Math.cos(th)-1));  // centered at origin, bent back to hug the globe
   }
   geo.computeVertexNormals();
   const mesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:tex,transparent:true,side:THREE.DoubleSide}));
