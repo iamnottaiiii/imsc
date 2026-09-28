@@ -2,197 +2,351 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>the wall — every follower's name, written by hand</title>
-<meta name="description" content="An infinite wall with every follower's name written by hand. Find yours.">
+<meta name="description" content="An infinite 3D wall with every follower's name written by hand. Find yours.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; padding: 0; }
   body {
+    position: fixed; inset: 0; overflow: hidden;
     background: #b0a89a;
     font-family: 'Permanent Marker', cursive;
     color: #2b2b2b;
-    min-height: 100vh;
   }
-  body::after {
-    content: "";
-    position: fixed; inset: 0;
-    pointer-events: none;
-    opacity: .35;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.5 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
-  }
+  #stage { position: fixed; inset: 0; touch-action: none; cursor: grab; }
+  #stage:active { cursor: grabbing; }
+  #stage canvas { display: block; }
   header {
-    position: sticky; top: 0; z-index: 30;
-    padding: 18px 22px 14px;
-    background: rgba(176,168,154,.94);
-    border-bottom: 3px solid #2b2b2b;
+    position: fixed; top: 0; left: 0; z-index: 30;
+    padding: 16px 18px 0;
+    pointer-events: none;
+    text-shadow: 0 1px 0 rgba(255,255,255,.28);
   }
-  h1 { margin: 0; font-size: 44px; line-height: 1; }
-  .sub { margin: 6px 0 0; font-size: 20px; color: #4a4438; }
-  .count { font-size: 22px; margin-top: 4px; }
-  .searchrow { display: flex; gap: 10px; margin-top: 12px; max-width: 560px; }
+  header h1 { margin: 0; font-size: 34px; line-height: 1; }
+  header .sub { margin: 4px 0 0; font-size: 17px; color: #4a4438; }
+  header .searchrow { display: flex; gap: 8px; margin-top: 8px; max-width: 340px; pointer-events: auto; }
   #q {
-    flex: 1; font-family: inherit; font-size: 22px;
+    flex: 1; font-family: inherit; font-size: 19px; min-width: 0;
     background: transparent; border: none;
     border-bottom: 3px solid #2b2b2b;
-    padding: 4px 2px; color: #2b2b2b; outline: none;
+    padding: 2px; color: #2b2b2b; outline: none;
   }
   #q::placeholder { color: #7a7365; }
   #go {
-    font-family: inherit; font-size: 22px; cursor: pointer;
+    font-family: inherit; font-size: 19px; cursor: pointer;
     background: #2b2b2b; color: #b0a89a;
-    border: none; padding: 6px 18px;
+    border: none; padding: 4px 14px;
     transform: rotate(-1.5deg);
   }
-  #go:active { transform: rotate(0deg) scale(.97); }
-  #msg { min-height: 28px; font-size: 20px; margin-top: 8px; color: #9a4a3a; }
-  #dim {
+  #msg { min-height: 24px; font-size: 16px; margin-top: 4px; color: #8a3d2e; max-width: 340px; }
+  header .cta { margin: 2px 0 0; font-size: 15px; color: #4a4438; pointer-events: auto; }
+  header .cta a { color: #2b2b2b; }
+  #spot {
     position: fixed; inset: 0; z-index: 15;
-    background: rgba(18, 16, 12, 0.88);
-    opacity: 0; pointer-events: none;
-    transition: opacity .45s ease;
+    pointer-events: none; opacity: 0; transition: opacity .35s ease;
   }
-  body.spotlight #dim { opacity: 1; pointer-events: auto; }
-  #scaler { transform-origin: top left; margin: 0 auto; position: relative; z-index: 1; }
-  #wall { position: relative; }
-  .tag {
-    position: absolute; white-space: nowrap;
-    transform: translate(-50%,-50%) rotate(var(--r));
-    color: var(--c); font-size: var(--s);
-    line-height: 1; padding: 6px 10px;
+  #spot.on { opacity: 1; pointer-events: auto; }
+  #hint {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%) rotate(-1deg);
+    z-index: 30; font-size: 18px; color: #4a4438; pointer-events: none;
+    text-shadow: 0 1px 0 rgba(255,255,255,.28);
+    transition: opacity 1s ease; white-space: nowrap;
   }
-  .tag.found {
-    z-index: 20;
-    color: #f5ecd8;
-    text-shadow: 0 0 14px rgba(245,236,216,.85), 0 0 42px rgba(245,236,216,.45);
+  #loading {
+    position: fixed; inset: 0; z-index: 40; display: flex;
+    align-items: center; justify-content: center;
+    font-size: 26px; background: #b0a89a;
   }
-  .tag.found::after {
-    content: ""; position: absolute; inset: -16px -24px;
-    border: 5px solid #e8d9b0; border-radius: 48% 52% 55% 45%;
-    transform: rotate(-4deg); pointer-events: none;
-    box-shadow: 0 0 24px rgba(232,217,176,.5);
+  #fallback {
+    position: fixed; inset: 0; z-index: 50; display: none;
+    align-items: center; justify-content: center; text-align: center;
+    font-size: 22px; padding: 30px; background: #b0a89a;
   }
-  footer {
-    padding: 30px 22px 60px; font-size: 20px; color: #4a4438;
-    max-width: 700px; position: relative; z-index: 1;
-  }
-  footer a { color: #2b2b2b; }
 </style>
 </head>
 <body>
-<div id="dim"></div>
+<div id="stage"></div>
+<div id="spot"></div>
 <header>
   <h1>the wall</h1>
-  <p class="sub">every follower's name, written by hand.</p>
-  <div class="count"><span id="count">…</span> names so far</div>
+  <p class="sub">every follower's name, written by hand. <span id="count">…</span> names so far.</p>
   <div class="searchrow">
     <input id="q" type="text" placeholder="find your name" autocomplete="off" spellcheck="false">
     <button id="go">find</button>
   </div>
   <div id="msg"></div>
+  <p class="cta">follow <a href="https://www.instagram.com/idk_cool_i_guess/">@idk_cool_i_guess</a> and your name gets written on the wall.</p>
 </header>
-<div id="scaler"><div id="wall"></div></div>
-<footer>
-  <p>follow <a href="https://www.instagram.com/idk_cool_i_guess/">@idk_cool_i_guess</a> and your name gets written on the wall.</p>
-  <p>imsc.bjvfi.com/wall</p>
-</footer>
-<script>
-const CELL_W = 320, CELL_H = 150;
+<div id="hint">drag to look around &middot; scroll or pinch to zoom</div>
+<div id="loading">painting the wall&hellip;</div>
+<div id="fallback"><p>this wall needs WebGL.<br>try a newer browser.</p></div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
 const COLORS = ["#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#9a4a3a","#4a6e6e"];
+const WALL_W = 64, MARGIN = 3.5, ROW_GAP = 2.6, COL_GAP = 2.0;
 
-function hashStr(s) {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
-  return h >>> 0;
-}
-function rnd(seed) {
-  let s = seed >>> 0;
-  return function() { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
-}
-function colsFor() {
-  const w = document.documentElement.clientWidth;
-  return w >= 1100 ? 5 : w >= 700 ? 3 : 2;
-}
+function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+function mulberry(seed){let s=seed>>>0;return function(){s=(Math.imul(s,1664525)+1013904223)>>>0;return s/4294967296;};}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
-const wall = document.getElementById("wall");
-const scaler = document.getElementById("scaler");
-let users = [];
-let curCols = 0;
+let renderer, scene, camera, maxAniso=4;
+const sprites=[];            // {sprite,name}
+const nameIndex=new Map();
+const cam={x:0,y:0,z:40};
+let camTarget=null;
+let spotlight=null, glowSprite=null;
+const tilt={x:0,y:0,tx:0,ty:0};
+const bounds={minX:-40,maxX:40,minY:-600,maxY:16};
+const stage=document.getElementById('stage');
+const spotEl=document.getElementById('spot');
+const v3=new THREE.Vector3();
 
-function layout() {
-  const cols = colsFor();
-  const wallW = cols * CELL_W;
-  wall.style.width = wallW + "px";
-  scaler.style.width = wallW + "px";
-  wall.innerHTML = "";
-  const rows = Math.ceil(users.length / cols);
-  wall.style.height = (rows * CELL_H) + "px";
-  users.forEach((u, i) => {
-    const row = Math.floor(i / cols), col = i % cols;
-    const r = rnd(hashStr(u.username + ":" + i));
-    const jx = (r() - .5) * 60, jy = (r() - .5) * 44;
-    const rot = ((r() - .5) * 16).toFixed(1) + "deg";
-    const color = COLORS[Math.floor(r() * COLORS.length)];
-    const size = Math.round(42 + r() * 18);
-    const el = document.createElement("div");
-    el.className = "tag";
-    el.textContent = "@" + u.username;
-    el.dataset.name = u.username.toLowerCase();
-    el.style.left = (col * CELL_W + CELL_W / 2 + jx) / wallW * 100 + "%";
-    el.style.top = (row * CELL_H + CELL_H / 2 + jy) + "px";
-    el.style.setProperty("--r", rot);
-    el.style.setProperty("--c", color);
-    el.style.setProperty("--s", size + "px");
-    wall.appendChild(el);
+boot().catch(()=>{document.getElementById('fallback').style.display='flex';document.getElementById('loading').style.display='none';});
+
+async function boot(){
+  await document.fonts.load('48px "Permanent Marker"');
+  await document.fonts.ready;
+  const users=await (await fetch('followers.json')).json();
+  document.getElementById('count').textContent=users.length;
+
+  renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.75));
+  renderer.setSize(innerWidth,innerHeight);
+  stage.appendChild(renderer.domElement);
+  maxAniso=renderer.capabilities.getMaxAnisotropy();
+
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0xb0a89a);
+  scene.fog=new THREE.Fog(0xb0a89a,70,170);
+  camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,0.1,600);
+
+  buildWall(users);
+  setupControls();
+  setupSearch();
+  addEventListener('resize',()=>{
+    camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth,innerHeight);
   });
-  curCols = cols;
-  fit();
-  clearSpotlight();
+  document.getElementById('loading').style.display='none';
+  setTimeout(()=>{document.getElementById('hint').style.opacity='0';},7000);
+  renderer.setAnimationLoop(tick);
 }
 
-function fit() {
-  const wallW = curCols * CELL_W;
-  const s = Math.min(1, document.documentElement.clientWidth / wallW);
-  scaler.style.transform = "scale(" + s + ")";
-  scaler.style.height = (wall.offsetHeight * s) + "px";
-}
-window.addEventListener("resize", () => {
-  if (colsFor() !== curCols) layout(); else fit();
-});
-
-fetch("followers.json").then(r => r.json()).then(data => {
-  users = data;
-  document.getElementById("count").textContent = users.length;
-  layout();
-});
-
-function clearSpotlight() {
-  document.body.classList.remove("spotlight");
-  document.querySelectorAll(".tag.found").forEach(e => e.classList.remove("found"));
-}
-function find() {
-  const msg = document.getElementById("msg");
-  const q = document.getElementById("q").value.trim().replace(/^@/, "").toLowerCase();
-  clearSpotlight();
-  if (!q) { msg.textContent = ""; return; }
-  const hit = [...wall.children].find(e => e.dataset.name === q);
-  if (hit) {
-    msg.textContent = "";
-    document.body.classList.add("spotlight");
-    hit.classList.add("found");
-    setTimeout(() => hit.scrollIntoView({ block: "center", behavior: "smooth" }), 60);
-  } else {
-    msg.textContent = "not on the wall yet. follow @idk_cool_i_guess and it will be.";
+function concreteTexture(){
+  const c=document.createElement('canvas');c.width=c.height=512;
+  const g=c.getContext('2d'),r=mulberry(7);
+  g.fillStyle='#b0a89a';g.fillRect(0,0,512,512);
+  for(let i=0;i<30;i++){
+    const x=r()*512,y=r()*512,rad=40+r()*140;
+    const gr=g.createRadialGradient(x,y,0,x,y,rad);
+    gr.addColorStop(0,r()<0.6?'rgba(118,108,92,0.10)':'rgba(214,204,184,0.10)');
+    gr.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=gr;g.beginPath();g.arc(x,y,rad,0,7);g.fill();
   }
+  for(let i=0;i<5200;i++){
+    g.fillStyle=r()<0.5?'rgba(60,55,48,0.07)':'rgba(232,224,206,0.07)';
+    g.fillRect(r()*512,r()*512,1.5,1.5);
+  }
+  const t=new THREE.CanvasTexture(c);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  t.colorSpace=THREE.SRGBColorSpace;
+  return t;
 }
-document.getElementById("go").addEventListener("click", find);
-document.getElementById("q").addEventListener("keydown", e => { if (e.key === "Enter") find(); });
-document.getElementById("q").addEventListener("input", e => { if (!e.target.value) clearSpotlight(); });
-document.getElementById("dim").addEventListener("click", clearSpotlight);
-document.addEventListener("keydown", e => { if (e.key === "Escape") clearSpotlight(); });
+
+const measureCtx=document.createElement('canvas').getContext('2d');
+function nameTexture(text,color){
+  measureCtx.font='48px "Permanent Marker"';
+  const w=Math.ceil(measureCtx.measureText(text).width);
+  const c=document.createElement('canvas');
+  c.width=w+30;c.height=78;
+  const g=c.getContext('2d');
+  g.font='48px "Permanent Marker"';
+  g.fillStyle=color;g.textBaseline='alphabetic';
+  g.fillText(text,15,56);
+  const t=new THREE.CanvasTexture(c);
+  t.anisotropy=maxAniso;t.colorSpace=THREE.SRGBColorSpace;
+  return {tex:t,aspect:c.width/c.height};
+}
+
+function textSprite(text,color,worldH){
+  const {tex,aspect}=nameTexture(text,color);
+  const m=new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false});
+  const s=new THREE.Sprite(m);
+  s.scale.set(worldH*aspect,worldH,1);
+  return s;
+}
+
+function buildWall(users){
+  const conc=concreteTexture();
+  // layout first so we know the wall height
+  const items=[];
+  let x=-WALL_W/2+MARGIN, y=0, rowH=0;
+  users.forEach((u,i)=>{
+    const r=mulberry(hashStr(u.username+':'+i));
+    const color=COLORS[Math.floor(r()*COLORS.length)];
+    const hWorld=2.5+r()*1.1;
+    measureCtx.font='48px "Permanent Marker"';
+    const tw=measureCtx.measureText('@'+u.username).width+30;
+    const wWorld=hWorld*(tw/78);
+    if(x+wWorld > WALL_W/2-MARGIN && x > -WALL_W/2+MARGIN){
+      y-=(rowH+ROW_GAP); x=-WALL_W/2+MARGIN; rowH=0;
+    }
+    const jx=(r()-0.5)*0.9, jy=(r()-0.5)*0.8;
+    items.push({u,color,hWorld,wWorld,px:x+wWorld/2+jx,py:y+jy,
+      pz:0.5+r()*0.4, rot:(r()-0.5)*0.10, r});
+    x+=wWorld+COL_GAP; rowH=Math.max(rowH,hWorld);
+  });
+  const topY=9, botY=y-rowH-14;
+  const wallH=topY-botY;
+
+  conc.repeat.set(WALL_W/26,wallH/26);
+  const wall=new THREE.Mesh(
+    new THREE.PlaneGeometry(WALL_W,wallH),
+    new THREE.MeshBasicMaterial({map:conc})
+  );
+  wall.position.set(0,(topY+botY)/2,0);
+  scene.add(wall);
+
+  // title painted at the top of the wall
+  const title=textSprite('the wall','#2b2b2b',4.6);
+  title.position.set(-WALL_W/2+MARGIN+11,topY-4.5,0.6);
+  title.material.rotation=-0.02;
+  scene.add(title);
+
+  for(const it of items){
+    const s=textSprite('@'+it.u.username,it.color,it.hWorld);
+    s.position.set(it.px,it.py,it.pz);
+    s.material.rotation=it.rot;
+    scene.add(s);
+    const e={sprite:s,name:it.u.username.toLowerCase()};
+    sprites.push(e); nameIndex.set(e.name,e);
+  }
+
+  // painted call-to-action at the bottom of the wall
+  const cta1=textSprite('follow @idk_cool_i_guess','#2b2b2b',3.4);
+  cta1.position.set(0,botY+9,0.6); cta1.material.rotation=0.015; scene.add(cta1);
+  const cta2=textSprite('get your name on the wall','#9a4a3a',3.0);
+  cta2.position.set(0,botY+5,0.6); cta2.material.rotation=-0.02; scene.add(cta2);
+
+  bounds.minX=-WALL_W/2-6; bounds.maxX=WALL_W/2+6;
+  bounds.maxY=topY+4; bounds.minY=botY-4;
+  cam.y=topY-14;
+}
+
+function setupControls(){
+  const el=renderer.domElement;
+  const pts=new Map(); let lastPinch=0;
+  el.addEventListener('pointerdown',e=>{
+    el.setPointerCapture(e.pointerId);
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  });
+  el.addEventListener('pointermove',e=>{
+    const nx=(e.clientX/innerWidth)*2-1, ny=(e.clientY/innerHeight)*2-1;
+    tilt.tx=clamp(nx,-1,1); tilt.ty=clamp(ny,-1,1);
+    if(!pts.has(e.pointerId))return;
+    const p=pts.get(e.pointerId);
+    const dx=e.clientX-p.x, dy=e.clientY-p.y;
+    p.x=e.clientX; p.y=e.clientY;
+    if(pts.size===1){panBy(dx,dy);}
+    else if(pts.size===2){
+      const a=[...pts.values()];
+      const d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+      if(lastPinch>0)zoomBy(lastPinch/d);
+      lastPinch=d;
+    }
+  });
+  const up=e=>{pts.delete(e.pointerId);if(pts.size<2)lastPinch=0;};
+  el.addEventListener('pointerup',up);
+  el.addEventListener('pointercancel',up);
+  el.addEventListener('wheel',e=>{
+    e.preventDefault();camTarget=null;
+    zoomBy(Math.pow(1.0016,e.deltaY));
+  },{passive:false});
+}
+function panBy(dx,dy){
+  camTarget=null;
+  const k=cam.z*0.0016;
+  cam.x=clamp(cam.x-dx*k,bounds.minX,bounds.maxX);
+  cam.y=clamp(cam.y+dy*k,bounds.minY,bounds.maxY);
+}
+function zoomBy(f){cam.z=clamp(cam.z*f,9,85);}
+
+function setupSearch(){
+  const input=document.getElementById('q');
+  const msg=document.getElementById('msg');
+  const go=()=>{
+    const q=input.value.trim().replace(/^@/,'').toLowerCase();
+    clearSpot();
+    if(!q){msg.textContent='';return;}
+    const e=nameIndex.get(q);
+    if(!e){msg.textContent='not on the wall yet. follow @idk_cool_i_guess and it will be.';return;}
+    msg.textContent='';
+    spotlight=e;
+    camTarget={x:e.sprite.position.x,y:e.sprite.position.y,z:19};
+    spotEl.classList.add('on');
+    if(!glowSprite){
+      const c=document.createElement('canvas');c.width=c.height=128;
+      const g=c.getContext('2d');
+      const gr=g.createRadialGradient(64,64,4,64,64,64);
+      gr.addColorStop(0,'rgba(255,244,214,0.85)');
+      gr.addColorStop(0.5,'rgba(255,244,214,0.28)');
+      gr.addColorStop(1,'rgba(255,244,214,0)');
+      g.fillStyle=gr;g.fillRect(0,0,128,128);
+      const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
+      glowSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+      scene.add(glowSprite);
+    }
+    glowSprite.visible=true;
+    glowSprite.position.copy(e.sprite.position);
+    glowSprite.position.z=e.sprite.position.z-0.1;
+    glowSprite.scale.set(e.sprite.scale.x*1.7,e.sprite.scale.y*2.4,1);
+  };
+  document.getElementById('go').addEventListener('click',go);
+  input.addEventListener('keydown',e=>{if(e.key==='Enter')go();});
+  input.addEventListener('input',()=>{if(!input.value)clearSpot();});
+  spotEl.addEventListener('click',clearSpot);
+  addEventListener('keydown',e=>{if(e.key==='Escape')clearSpot();});
+}
+function clearSpot(){
+  spotlight=null;spotEl.classList.remove('on');
+  if(glowSprite)glowSprite.visible=false;
+}
+
+const clock=new THREE.Clock();
+function tick(){
+  const t=clock.getElapsedTime();
+  if(camTarget){
+    cam.x+=(camTarget.x-cam.x)*0.085;
+    cam.y+=(camTarget.y-cam.y)*0.085;
+    cam.z+=(camTarget.z-cam.z)*0.085;
+    if(Math.abs(camTarget.x-cam.x)<0.05&&Math.abs(camTarget.y-cam.y)<0.05&&Math.abs(camTarget.z-cam.z)<0.05)camTarget=null;
+  }
+  tilt.x+=(tilt.tx-tilt.x)*0.05; tilt.y+=(tilt.ty-tilt.y)*0.05;
+  camera.position.set(cam.x,cam.y,cam.z);
+  camera.lookAt(cam.x,cam.y,0);
+  camera.rotateX(tilt.y*0.022);
+  camera.rotateZ(tilt.x*-0.014);
+  if(spotlight){
+    v3.copy(spotlight.sprite.position).project(camera);
+    const sx=(v3.x*0.5+0.5)*innerWidth, sy=(-v3.y*0.5+0.5)*innerHeight;
+    spotEl.style.background=
+      `radial-gradient(circle 130px at ${sx.toFixed(1)}px ${sy.toFixed(1)}px, rgba(0,0,0,0) 0, rgba(0,0,0,0) 130px, rgba(13,10,7,0.94) 235px)`;
+    if(glowSprite){
+      const p=1+Math.sin(t*4.5)*0.07;
+      glowSprite.scale.set(spotlight.sprite.scale.x*1.7*p,spotlight.sprite.scale.y*2.4*p,1);
+    }
+  }
+  renderer.render(scene,camera);
+}
 </script>
 </body>
 </html>
