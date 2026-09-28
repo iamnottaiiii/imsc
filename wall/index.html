@@ -27,10 +27,7 @@
     padding: 16px 18px 0;
     pointer-events: none;
     text-shadow: 0 1px 0 rgba(255,255,255,.28);
-    transition: opacity .5s ease;
   }
-  header.gone { opacity: 0; }
-  header.gone .searchrow, header.gone .cta { pointer-events: none; }
   header h1 { margin: 0; font-size: 34px; line-height: 1; }
   header .sub { margin: 4px 0 0; font-size: 17px; color: #4a4438; }
   header .searchrow { display: flex; gap: 8px; margin-top: 8px; max-width: 340px; pointer-events: auto; }
@@ -106,10 +103,7 @@ let yaw=0, pitch=0, fov=60;   // look direction; yaw wraps forever
 let yawTarget=null, pitchTarget=null, fovTarget=null;
 let dragging=false, yawVel=0, pitchVel=0;
 let spotlight=null, glowSprite=null;
-const homeDir=new THREE.Vector3(0,0,1);
 const stage=document.getElementById('stage');
-const headerEl=document.querySelector('header');
-const _vd=new THREE.Vector3();
 
 boot().catch(()=>{document.getElementById('fallback').style.display='flex';document.getElementById('loading').style.display='none';});
 
@@ -161,7 +155,7 @@ function concreteTexture(){
   const blob=(x,y,rad,dark)=>{
     for(const ox of [-S,0,S])for(const oy of [-S,0,S]){
       const gr=g.createRadialGradient(x+ox,y+oy,0,x+ox,y+oy,rad);
-      gr.addColorStop(0,dark?'rgba(128,114,96,0.08)':'rgba(222,212,190,0.08)');
+      gr.addColorStop(0,dark?'rgba(128,114,96,0.035)':'rgba(222,212,190,0.035)');
       gr.addColorStop(1,'rgba(0,0,0,0)');
       g.fillStyle=gr;g.beginPath();g.arc(x+ox,y+oy,rad,0,7);g.fill();
     }
@@ -193,35 +187,17 @@ function nameTexture(text,color){
   return {tex:t,aspect:c.width/c.height};
 }
 
-/* name patch curved to hug the globe, readable from the center */
-function curvedName(text,color,worldH){
+/* names always face you and stay upright: readable from anywhere inside the globe */
+function makeName(text,color,worldH,roll){
   const {tex,aspect}=nameTexture(text,color);
-  const wWorld=worldH*aspect;
-  const segs=Math.max(8,Math.round(wWorld*2));
-  const geo=new THREE.PlaneGeometry(wWorld,worldH,segs,1);
-  const pos=geo.attributes.position;
-  const rn=R-0.4;
-  for(let i=0;i<pos.count;i++){
-    const x=pos.getX(i),y=pos.getY(i);
-    const th=x/rn;
-    pos.setXYZ(i,rn*Math.sin(th),y,rn*(Math.cos(th)-1));  // centered at origin, bent back to hug the globe
-  }
-  geo.computeVertexNormals();
-  const mesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:tex,transparent:true,side:THREE.DoubleSide}));
-  return {mesh,wWorld};
+  const mat=new THREE.SpriteMaterial({map:tex,transparent:true,rotation:roll});
+  const sp=new THREE.Sprite(mat);
+  sp.scale.set(worldH*aspect,worldH,1);
+  return sp;
 }
-
-const _x=new THREE.Vector3(),_y=new THREE.Vector3(),_z=new THREE.Vector3(),_m4=new THREE.Matrix4();
-function placeOnSphere(mesh,dir,roll){
-  _z.copy(dir).normalize();
-  _x.crossVectors(UP,_z);
-  if(_x.lengthSq()<1e-6)_x.set(1,0,0);else _x.normalize();
-  _y.crossVectors(_z,_x).normalize();
-  _m4.makeBasis(_x,_y,_z);
-  mesh.quaternion.setFromRotationMatrix(_m4);
-  mesh.position.copy(_z).multiplyScalar(R-0.4);
-  mesh.rotateZ(roll);
-  scene.add(mesh);
+function placeSprite(sp,dir){
+  sp.position.copy(dir).multiplyScalar(R-0.4);
+  scene.add(sp);
 }
 
 function buildWorld(users){
@@ -233,9 +209,7 @@ function buildWorld(users){
   ));
 
   const titleDir=new THREE.Vector3(0.45,0.10,1).normalize();
-  const ctaDir=new THREE.Vector3(-0.5,-0.30,1).normalize();
-  const ctaDir2=ctaDir.clone().add(new THREE.Vector3(0,-0.10,0)).normalize();
-  const reserved=[titleDir,ctaDir,ctaDir2];
+  const reserved=[titleDir];
 
   let s=0;
   users.forEach((u,i)=>{
@@ -251,21 +225,16 @@ function buildWorld(users){
     let worldH=(0.055+r()*0.015)*R;
     const maxW=0.10*R;
     if(worldH*aspect>maxW)worldH=worldH*maxW/(worldH*aspect);
-    const {mesh}=curvedName('@'+u.username,color,worldH);
-    placeOnSphere(mesh,d,(r()-0.5)*0.10);
+    const sp=makeName('@'+u.username,color,worldH,(r()-0.5)*0.10);
+    placeSprite(sp,d);
     nameIndex.set(u.username.toLowerCase(),{dir:d.clone()});
   });
 
-  const title=curvedName('the globe','#2b2b2b',0.11*R).mesh;
-  placeOnSphere(title,titleDir,-0.02);
-  const cta1=curvedName('follow @idk_cool_i_guess','#2b2b2b',0.06*R).mesh;
-  placeOnSphere(cta1,ctaDir,0.015);
-  const cta2=curvedName('get your name on the globe','#9a4a3a',0.055*R).mesh;
-  placeOnSphere(cta2,ctaDir2,-0.02);
+  const title=makeName('the globe','#2b2b2b',0.11*R,-0.02);
+  placeSprite(title,titleDir);
 
   yaw=Math.atan2(-titleDir.x,-titleDir.z);
   pitch=Math.asin(clamp(titleDir.y,-1,1));
-  homeDir.copy(titleDir);
 }
 
 function setupControls(){
@@ -368,9 +337,6 @@ function tick(){
     }
   }
   camera.rotation.set(pitch,yaw,0);
-  // the search ui lives at the entrance view; look away and it gets out of the way
-  _vd.set(-Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch));
-  headerEl.classList.toggle('gone',_vd.dot(homeDir)<Math.cos(0.6));
   if(spotlight&&glowSprite){
     const p=1+Math.sin(t*4.5)*0.06;
     glowSprite.scale.set(6.5*p,7.5*p,1);
