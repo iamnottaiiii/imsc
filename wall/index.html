@@ -1,193 +1,143 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>the globe — for all my followers</title>
-<meta name="description" content="A globe holding every follower's name. Find yours.">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>The Globe</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; padding: 0; }
-  body {
-    position: fixed; inset: 0; overflow: hidden;
-    background: #b3a996;
-    font-family: 'Permanent Marker', cursive;
-    color: #2b2b2b;
-  }
-  #stage { position: fixed; inset: 0; touch-action: none; cursor: grab; }
-  #stage:active { cursor: grabbing; }
-  #stage canvas { display: block; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#cfc6b4; overscroll-behavior:none; }
+  body { font-family:'Permanent Marker',cursive; }
+  #stage { position:fixed; inset:0; touch-action:none; }
+  #stage canvas { display:block; }
+  #vignette { position:fixed; inset:0; pointer-events:none;
+    background:radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 55%, rgba(70,58,44,.22) 100%); }
   header {
-    position: fixed; top: 0; left: 0; z-index: 30;
-    padding: 16px 18px 0;
-    pointer-events: none;
-    text-shadow: 0 1px 0 rgba(255,255,255,.28);
+    position:fixed; top:0; left:0; right:0; z-index:10;
+    padding:18px 20px 14px; text-align:center; pointer-events:none;
   }
-  header h1 { margin: 0; font-size: 34px; line-height: 1; }
-  header .sub { margin: 4px 0 0; font-size: 17px; color: #4a4438; }
-  header .searchrow { display: flex; gap: 8px; margin-top: 8px; max-width: 340px; pointer-events: auto; }
-  #q {
-    flex: 1; font-family: inherit; font-size: 19px; min-width: 0;
-    background: transparent; border: none;
-    border-bottom: 3px solid #2b2b2b;
-    padding: 2px; color: #2b2b2b; outline: none;
+  header h1 {
+    font-size:clamp(30px,6vw,52px); color:#2b2b2b; letter-spacing:1px;
+    text-shadow:0 1px 0 rgba(255,255,255,.35); line-height:1;
   }
-  #q::placeholder { color: #7a7365; }
-  #go {
-    font-family: inherit; font-size: 19px; cursor: pointer;
-    background: #2b2b2b; color: #b3a996;
-    border: none; padding: 4px 14px;
-    transform: rotate(-1.5deg);
+  header .sub {
+    margin-top:6px; font-size:clamp(14px,2.6vw,20px); color:#4a4438;
+    text-shadow:0 1px 0 rgba(255,255,255,.3);
   }
-  #msg { min-height: 24px; font-size: 16px; margin-top: 4px; color: #8a3d2e; max-width: 340px; }
-  header .cta { margin: 2px 0 0; font-size: 15px; color: #4a4438; pointer-events: auto; }
-  header .cta a { color: #2b2b2b; }
+  header .searchrow { margin-top:10px; display:flex; gap:8px; justify-content:center; pointer-events:auto; }
+  header input {
+    font-family:inherit; font-size:16px; padding:8px 14px; width:min(240px,55vw);
+    border:2px solid #2b2b2b; border-radius:999px; background:rgba(255,255,255,.75);
+    color:#2b2b2b; outline:none;
+  }
+  header input::placeholder { color:#8a8172; }
+  header button {
+    font-family:inherit; font-size:16px; padding:8px 18px; cursor:pointer;
+    border:2px solid #2b2b2b; border-radius:999px; background:#2b2b2b; color:#f5efe2;
+  }
+  header button:active { transform:scale(.96); }
+  header .cta {
+    margin-top:8px; font-size:clamp(13px,2.4vw,17px); color:#6b5f4c;
+    text-shadow:0 1px 0 rgba(255,255,255,.3);
+  }
+  header .cta b { color:#9a4a3a; }
   #hint {
-    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%) rotate(-1deg);
-    z-index: 30; font-size: 18px; color: #4a4438; pointer-events: none;
-    text-shadow: 0 1px 0 rgba(255,255,255,.28);
-    transition: opacity 1s ease; white-space: nowrap;
+    position:fixed; bottom:16px; left:0; right:0; z-index:10; text-align:center;
+    font-size:14px; color:#6b5f4c; text-shadow:0 1px 0 rgba(255,255,255,.3);
+    pointer-events:none;
   }
   #loading {
-    position: fixed; inset: 0; z-index: 40; display: flex;
-    align-items: center; justify-content: center;
-    font-size: 26px; background: #b3a996;
+    position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
+    background:#cfc6b4; color:#4a4438; font-size:22px;
   }
   #fallback {
-    position: fixed; inset: 0; z-index: 50; display: none;
-    align-items: center; justify-content: center; text-align: center;
-    font-size: 22px; padding: 30px; background: #b3a996;
+    position:fixed; inset:0; z-index:30; display:none; align-items:center; justify-content:center;
+    background:#cfc6b4; color:#4a4438; font-size:20px; text-align:center; padding:40px;
   }
 </style>
 </head>
 <body>
 <div id="stage"></div>
+<div id="vignette"></div>
 <header>
-  <h1>the globe</h1>
-  <p class="sub">I made a globe for all my followers. <span id="count">…</span> names so far.</p>
+  <h1>THE GLOBE</h1>
+  <div class="sub">I made a globe for all my followers. <span id="count">loading</span> names so far.</div>
   <div class="searchrow">
-    <input id="q" type="text" placeholder="find your name" autocomplete="off" spellcheck="false">
-    <button id="go">find</button>
+    <input id="q" type="text" placeholder="find your name" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button id="go">FIND</button>
   </div>
-  <div id="msg"></div>
-  <p class="cta">follow <a href="https://www.instagram.com/idk_cool_i_guess/">@idk_cool_i_guess</a> and your name gets added to the globe.</p>
+  <div class="cta">follow <b>@idk_cool_i_guess</b> and your name gets added to the globe.</div>
 </header>
-<div id="hint">drag to look around &middot; pinch to zoom</div>
-<div id="loading">painting the globe&hellip;</div>
-<div id="fallback"><p>this globe needs WebGL.<br>try a newer browser.</p></div>
+<div id="hint">drag to spin &middot; scroll or pinch to zoom</div>
+<div id="loading">rolling the globe&hellip;</div>
+<div id="fallback">this globe needs WebGL.<br>try opening it in Safari or Chrome.</div>
 
 <script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
 </script>
+
 <script type="module">
 import * as THREE from 'three';
 
-const COLORS = ["#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#9a4a3a","#4a6e6e"];
-const R = 42;                 // globe radius (look is angular; you're at the center)
-const SLOTS = 768;            // fibonacci slots for names; new names take the next free slot
-const WALL_COLOR = 0xb3a996;
-const UP = new THREE.Vector3(0,1,0);
+const R = 10;                 // globe radius
+const NAME_R = R + 0.18;      // names float just off the surface
+const SLOTS = 768;            // fibonacci slots, stable as names are appended
 
-function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
-function mulberry(seed){let s=seed>>>0;return function(){s=(Math.imul(s,1664525)+1013904223)>>>0;return s/4294967296;};}
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+/* ---------- deterministic rand ---------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 
-let renderer, scene, camera, maxAniso=4;
-const nameIndex=new Map();
-let yaw=0, pitch=0, fov=60;   // look direction; yaw wraps forever
-let yawTarget=null, pitchTarget=null, fovTarget=null;
-let dragging=false, yawVel=0, pitchVel=0;
-let spotlight=null, glowSprite=null;
-const stage=document.getElementById('stage');
-
-boot().catch(()=>{document.getElementById('fallback').style.display='flex';document.getElementById('loading').style.display='none';});
-
-async function boot(){
-  await document.fonts.load('48px "Permanent Marker"');
-  await document.fonts.ready;
-  const users=await (await fetch('followers.json')).json();
-  document.getElementById('count').textContent=users.length;
-
-  renderer=new THREE.WebGLRenderer({antialias:true});
-  renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.75));
-  renderer.setSize(innerWidth,innerHeight);
-  stage.appendChild(renderer.domElement);
-  maxAniso=renderer.capabilities.getMaxAnisotropy();
-
-  scene=new THREE.Scene();
-  scene.background=new THREE.Color(WALL_COLOR);
-  fov=(innerWidth/innerHeight)<0.8?66:58;
-  camera=new THREE.PerspectiveCamera(fov,innerWidth/innerHeight,0.1,600);
-  camera.rotation.order='YXZ';
-  camera.position.set(0,0,0);
-
-  buildWorld(users);
-  setupControls();
-  setupSearch();
-  addEventListener('resize',()=>{
-    camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth,innerHeight);
-  });
-  document.getElementById('loading').style.display='none';
-  setTimeout(()=>{document.getElementById('hint').style.opacity='0';},7000);
-  renderer.setAnimationLoop(tick);
-}
-
-/* even points on a sphere; index i is always the same direction (new names append) */
-function fibDir(i,n){
-  const ga=Math.PI*(3-Math.sqrt(5));
-  const y=1-((i+0.5)/n)*2;
-  const rad=Math.sqrt(Math.max(0,1-y*y));
-  const th=ga*i;
-  return new THREE.Vector3(Math.cos(th)*rad,y,Math.sin(th)*rad);
-}
-
-/* seamless warm concrete */
+/* ---------- concrete texture ---------- */
 function concreteTexture(){
-  const S=512, c=document.createElement('canvas');c.width=c.height=S;
-  const g=c.getContext('2d'),r=mulberry(7);
-  g.fillStyle='#b3a996';g.fillRect(0,0,S,S);
-  const blob=(x,y,rad,dark)=>{
-    for(const ox of [-S,0,S])for(const oy of [-S,0,S]){
-      const gr=g.createRadialGradient(x+ox,y+oy,0,x+ox,y+oy,rad);
+  const S=1024,c=document.createElement('canvas');c.width=c.height=S;
+  const g=c.getContext('2d');
+  g.fillStyle='#c3b8a4';g.fillRect(0,0,S,S);
+  const r=mulberry32(7);
+  for(let i=0;i<900;i++){ // soft blotches, tileable in x
+    const x=r()*S,y=r()*S,rad=20+r()*90,dark=r()>0.5;
+    for(const ox of [-S,0,S]){
+      const gr=g.createRadialGradient(x+ox,y,0,x+ox,y,rad);
       gr.addColorStop(0,dark?'rgba(128,114,96,0.035)':'rgba(222,212,190,0.035)');
       gr.addColorStop(1,'rgba(0,0,0,0)');
-      g.fillStyle=gr;g.beginPath();g.arc(x+ox,y+oy,rad,0,7);g.fill();
+      g.fillStyle=gr;g.beginPath();g.arc(x+ox,y,rad,0,7);g.fill();
     }
-  };
-  for(let i=0;i<30;i++)blob(r()*S,r()*S,40+r()*140,r()<0.6);
-  for(let i=0;i<5200;i++){
-    const x=r()*S,y=r()*S;
-    g.fillStyle=r()<0.5?'rgba(70,62,52,0.06)':'rgba(236,229,213,0.06)';
-    for(const ox of [-S,0,S])for(const oy of [-S,0,S])g.fillRect(x+ox,y+oy,1.5,1.5);
   }
-  const t=new THREE.CanvasTexture(c);
-  t.wrapS=t.wrapT=THREE.RepeatWrapping;
-  t.anisotropy=maxAniso;t.colorSpace=THREE.SRGBColorSpace;
-  return t;
+  for(let i=0;i<5200;i++){ // speckle
+    const x=r()*S,y=r()*S,dark=r()>0.5;
+    g.fillStyle=dark?'rgba(90,80,66,0.10)':'rgba(235,228,210,0.10)';
+    g.fillRect(x,y,1.4,1.4);
+  }
+  const tex=new THREE.CanvasTexture(c);
+  tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+  tex.repeat.set(6,3);
+  tex.colorSpace=THREE.SRGBColorSpace;
+  return tex;
 }
 
+/* ---------- marker text sprites ---------- */
 const measureCtx=document.createElement('canvas').getContext('2d');
 function nameTexture(text,color){
-  measureCtx.font='48px "Permanent Marker"';
-  const w=Math.ceil(measureCtx.measureText(text).width);
-  const c=document.createElement('canvas');
-  c.width=w+30;c.height=78;
+  const px=64,pad=18;
+  measureCtx.font=px+'px "Permanent Marker"';
+  const w=Math.ceil(measureCtx.measureText(text).width)+pad*2;
+  const h=px+pad*2;
+  const c=document.createElement('canvas');c.width=w;c.height=h;
   const g=c.getContext('2d');
-  g.font='48px "Permanent Marker"';
-  g.fillStyle=color;g.textBaseline='alphabetic';
-  g.fillText(text,15,56);
-  const t=new THREE.CanvasTexture(c);
-  t.anisotropy=maxAniso;t.colorSpace=THREE.SRGBColorSpace;
-  return {tex:t,aspect:c.width/c.height};
+  g.font=px+'px "Permanent Marker"';
+  g.textBaseline='middle';
+  g.shadowColor='rgba(60,50,38,.35)';g.shadowBlur=3;g.shadowOffsetY=2;
+  g.fillStyle=color;
+  g.fillText(text,pad,h/2+2);
+  const tex=new THREE.CanvasTexture(c);
+  tex.colorSpace=THREE.SRGBColorSpace;
+  tex.anisotropy=4;
+  return {tex,aspect:w/h};
 }
-
-/* names always face you and stay upright: readable from anywhere inside the globe */
 function makeName(text,color,worldH,roll){
   const {tex,aspect}=nameTexture(text,color);
   const mat=new THREE.SpriteMaterial({map:tex,transparent:true,rotation:roll});
@@ -195,154 +145,228 @@ function makeName(text,color,worldH,roll){
   sp.scale.set(worldH*aspect,worldH,1);
   return sp;
 }
-function placeSprite(sp,dir){
-  sp.position.copy(dir).multiplyScalar(R-0.4);
-  scene.add(sp);
+
+/* ---------- fibonacci sphere ---------- */
+function fibDir(i,n){
+  const y=1-(i/(n-1))*2;
+  const rad=Math.sqrt(Math.max(0,1-y*y));
+  const th=i*2.399963;
+  return new THREE.Vector3(Math.cos(th)*rad,y,Math.sin(th)*rad);
 }
 
-function buildWorld(users){
-  const conc=concreteTexture();
-  conc.repeat.set(8,4);
-  scene.add(new THREE.Mesh(
-    new THREE.SphereGeometry(R,72,48),
-    new THREE.MeshBasicMaterial({map:conc,side:THREE.BackSide})
-  ));
+/* ---------- boot ---------- */
+const stage=document.getElementById('stage');
+let renderer;
+try{
+  renderer=new THREE.WebGLRenderer({antialias:true});
+}catch(e){
+  document.getElementById('loading').style.display='none';
+  document.getElementById('fallback').style.display='flex';
+  throw e;
+}
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.setClearColor(0xcfc6b4,1);
+stage.appendChild(renderer.domElement);
 
-  const titleDir=new THREE.Vector3(0.45,0.10,1).normalize();
-  const reserved=[titleDir];
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,0.1,300);
+let camDist=26;
+const CAM_MIN=15,CAM_MAX=46;
+function placeCamera(){camera.position.set(0,0,camDist);camera.lookAt(0,0,0);}
+placeCamera();
 
-  let s=0;
-  users.forEach((u,i)=>{
-    let d;
-    for(;;){
-      d=fibDir(s%SLOTS,SLOTS);s++;
-      if(s>SLOTS*2||reserved.every(rd=>d.angleTo(rd)>=0.24))break;
-    }
-    const r=mulberry(hashStr(u.username+':'+i));
-    const color=COLORS[Math.floor(r()*COLORS.length)];
-    measureCtx.font='48px "Permanent Marker"';
-    const aspect=(measureCtx.measureText('@'+u.username).width+30)/78;
-    let worldH=(0.055+r()*0.015)*R;
-    const maxW=0.10*R;
-    if(worldH*aspect>maxW)worldH=worldH*maxW/(worldH*aspect);
-    const sp=makeName('@'+u.username,color,worldH,(r()-0.5)*0.10);
-    placeSprite(sp,d);
-    nameIndex.set(u.username.toLowerCase(),{dir:d.clone()});
+scene.add(new THREE.AmbientLight(0xfff6e8,0.85));
+const key=new THREE.DirectionalLight(0xfff2dd,1.6);key.position.set(8,12,10);scene.add(key);
+const rim=new THREE.DirectionalLight(0xdde8ff,0.5);rim.position.set(-10,-4,-8);scene.add(rim);
+
+const globeGroup=new THREE.Group();
+globeGroup.rotation.order='YXZ';
+scene.add(globeGroup);
+
+const globe=new THREE.Mesh(
+  new THREE.SphereGeometry(R,96,64),
+  new THREE.MeshStandardMaterial({map:concreteTexture(),roughness:0.95,metalness:0})
+);
+globeGroup.add(globe);
+
+/* soft shadow under the globe */
+{
+  const c=document.createElement('canvas');c.width=c.height=256;
+  const g=c.getContext('2d');
+  const gr=g.createRadialGradient(128,128,10,128,128,128);
+  gr.addColorStop(0,'rgba(60,50,38,.35)');gr.addColorStop(1,'rgba(60,50,38,0)');
+  g.fillStyle=gr;g.fillRect(0,0,256,256);
+  const tex=new THREE.CanvasTexture(c);
+  const sh=new THREE.Mesh(new THREE.PlaneGeometry(30,30),
+    new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false}));
+  sh.rotation.x=-Math.PI/2;sh.position.y=-R-3.2;
+  scene.add(sh);
+}
+
+/* ---------- state ---------- */
+let yaw=0.6,pitch=0.25;                 // globe spin
+const PITCH_CLAMP=1.5;
+let vyaw=0,vpitch=0;                    // inertia
+let dragging=false,lastInteract=0;
+let fly=null;                           // search flight {from,to,t}
+const nameIndex=new Map();
+let glowSprite=null;
+const qInput=document.getElementById('q');
+
+function markInteract(){lastInteract=performance.now();}
+
+/* ---------- build ---------- */
+async function boot(){
+  let users=[];
+  try{
+    const res=await fetch('followers.json?v='+Date.now());
+    if(res.ok){const j=await res.json();users=j.followers||[];}
+  }catch(e){}
+  document.getElementById('count').textContent=users.length;
+
+  try{await document.fonts.load('64px "Permanent Marker"');}catch(e){}
+
+  const r=mulberry32(1234);
+  const palette=['#2b2b2b','#2b2b2b','#2b2b2b','#2b2b2b','#4a5a6a','#9a4a3a','#3a6a5a'];
+  let s=1; // skip slot 0 (exact pole): keeps min name separation wide
+  users.forEach(u=>{
+    const d=fibDir(s%SLOTS,SLOTS);s++;
+    const color=palette[Math.floor(r()*palette.length)];
+    let h=0.62+r()*0.22;
+    const px=64,pad=18;
+    measureCtx.font=px+'px "Permanent Marker"';
+    const aspect=(measureCtx.measureText('@'+u.username).width+pad*2)/(px+pad*2);
+    let w=h*aspect;
+    if(w>1.0){w=1.0;h=1.0/aspect;}      // width cap keeps real gaps
+    const sp=makeName('@'+u.username,color,h,(r()-0.5)*0.10);
+    sp.position.copy(d).multiplyScalar(NAME_R);
+    globeGroup.add(sp);
+    nameIndex.set(u.username.toLowerCase(),d.clone());
   });
 
-  const title=makeName('the globe','#2b2b2b',0.11*R,-0.02);
-  placeSprite(title,titleDir);
-
-  yaw=Math.atan2(-titleDir.x,-titleDir.z);
-  pitch=Math.asin(clamp(titleDir.y,-1,1));
+  document.getElementById('loading').style.display='none';
+  markInteract();
+  renderer.setAnimationLoop(tick);
 }
 
-function setupControls(){
-  const el=renderer.domElement;
-  const pts=new Map();let lastPinch=0;
-  el.addEventListener('pointerdown',e=>{
-    el.setPointerCapture(e.pointerId);
-    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
-    yawTarget=null;pitchTarget=null;dragging=true;yawVel=0;pitchVel=0;clearSpot();
-  });
-  el.addEventListener('pointermove',e=>{
-    if(!pts.has(e.pointerId))return;
-    const p=pts.get(e.pointerId);
-    const dx=e.clientX-p.x,dy=e.clientY-p.y;
-    p.x=e.clientX;p.y=e.clientY;
-    if(pts.size===1){
-      yawTarget=null;pitchTarget=null;
-      yawVel=dx*0.005;pitchVel=dy*0.005;   // flick to keep looking around
-      yaw+=yawVel;
-      pitch=clamp(pitch+pitchVel,-1.45,1.45);
-    }else if(pts.size===2){
-      const a=[...pts.values()];
-      const d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
-      if(lastPinch>0){fovTarget=clamp((fovTarget??fov)*lastPinch/d,38,80);}
-      lastPinch=d;
-    }
-  });
-  const up=e=>{pts.delete(e.pointerId);if(pts.size<2)lastPinch=0;if(pts.size===0)dragging=false;};
-  el.addEventListener('pointerup',up);
-  el.addEventListener('pointercancel',up);
-  el.addEventListener('wheel',e=>{
-    e.preventDefault();fovTarget=clamp((fovTarget??fov)*Math.pow(1.0016,e.deltaY),38,80);
-  },{passive:false});
+/* ---------- search ---------- */
+function clearGlow(){
+  if(glowSprite){globeGroup.remove(glowSprite);glowSprite=null;}
 }
+function find(){
+  const q=qInput.value.trim().replace(/^@/,'').toLowerCase();
+  if(!q)return;
+  const d=nameIndex.get(q);
+  clearGlow();
+  if(!d){
+    qInput.placeholder='not on the globe yet';
+    qInput.value='';
+    setTimeout(()=>{qInput.placeholder='find your name';},2200);
+    return;
+  }
+  // soft light behind the name
+  const c=document.createElement('canvas');c.width=c.height=128;
+  const g=c.getContext('2d');
+  const gr=g.createRadialGradient(64,64,4,64,64,64);
+  gr.addColorStop(0,'rgba(255,244,214,.95)');gr.addColorStop(1,'rgba(255,244,214,0)');
+  g.fillStyle=gr;g.fillRect(0,0,128,128);
+  const glow=new THREE.Sprite(new THREE.SpriteMaterial({
+    map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false}));
+  glow.scale.set(3.4,3.4,1);
+  glow.position.copy(d).multiplyScalar(R+0.05);
+  globeGroup.add(glow);
+  glowSprite=glow;
+  // spin the globe so the name faces you (closed form, verified to land dead center)
+  const pt=Math.atan2(d.y,d.z);
+  const d1=d.clone().applyEuler(new THREE.Euler(pt,0,0,'YXZ'));
+  const yt=Math.atan2(-d1.x,d1.z);
+  let dyaw=yt-yaw;
+  dyaw=Math.atan2(Math.sin(dyaw),Math.cos(dyaw));   // shortest way around
+  const pc=Math.max(-PITCH_CLAMP,Math.min(PITCH_CLAMP,pt));
+  fly={yaw0:yaw,dyaw:dyaw,pitch0:pitch,dpitch:pc-pitch,t:0};
+  markInteract();
+}
+document.getElementById('go').addEventListener('click',find);
+qInput.addEventListener('keydown',e=>{if(e.key==='Enter')find();});
 
-function setupSearch(){
-  const input=document.getElementById('q');
-  const msg=document.getElementById('msg');
-  const go=()=>{
-    const q=input.value.trim().replace(/^@/,'').toLowerCase();
-    clearSpot();
-    if(!q){msg.textContent='';return;}
-    const e=nameIndex.get(q);
-    if(!e){msg.textContent='not on the globe yet. follow @idk_cool_i_guess to be added.';return;}
-    msg.textContent='';
-    spotlight=e;
-    yawVel=0;pitchVel=0;
-    const d=e.dir;
-    const yawT=Math.atan2(-d.x,-d.z);
-    const pitchT=Math.asin(clamp(d.y,-1,1));
-    yawTarget=yaw+(((yawT-yaw+Math.PI*3)%(Math.PI*2))-Math.PI);  // shortest spin
-    pitchTarget=pitchT;fovTarget=55;
-    if(!glowSprite){
-      const c=document.createElement('canvas');c.width=c.height=256;
-      const g=c.getContext('2d');
-      const gr=g.createRadialGradient(128,128,8,128,128,128);
-      gr.addColorStop(0,'rgba(255,250,230,0.9)');
-      gr.addColorStop(0.35,'rgba(255,244,210,0.4)');
-      gr.addColorStop(1,'rgba(255,244,210,0)');
-      g.fillStyle=gr;g.fillRect(0,0,256,256);
-      const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
-      glowSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
-      scene.add(glowSprite);
-    }
-    glowSprite.visible=true;
-    glowSprite.position.copy(d).multiplyScalar(R-0.15);
-    glowSprite.scale.set(6.5,7.5,1);
-  };
-  document.getElementById('go').addEventListener('click',go);
-  input.addEventListener('keydown',e=>{if(e.key==='Enter')go();});
-  input.addEventListener('input',()=>{if(!input.value)clearSpot();});
-  addEventListener('keydown',e=>{if(e.key==='Escape')clearSpot();});
+/* ---------- controls: drag spins the globe ---------- */
+const pointers=new Map();
+let pinchD0=0,camD0=26;
+stage.addEventListener('pointerdown',e=>{
+  stage.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size===1){dragging=true;vyaw=vpitch=0;}
+  if(pointers.size===2){
+    const p=[...pointers.values()];
+    pinchD0=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);camD0=camDist;
+  }
+  fly=null;clearGlow();markInteract();
+});
+stage.addEventListener('pointermove',e=>{
+  const p=pointers.get(e.pointerId);
+  if(!p)return;
+  const dx=e.clientX-p.x,dy=e.clientY-p.y;
+  p.x=e.clientX;p.y=e.clientY;
+  if(pointers.size===1&&dragging){
+    vyaw=-dx*0.005;vpitch=-dy*0.005;
+    yaw+=vyaw;pitch=Math.max(-PITCH_CLAMP,Math.min(PITCH_CLAMP,pitch+vpitch));
+  }else if(pointers.size===2){
+    const q=[...pointers.values()];
+    const d=Math.hypot(q[0].x-q[1].x,q[0].y-q[1].y);
+    if(pinchD0>0)camDist=Math.max(CAM_MIN,Math.min(CAM_MAX,camD0*pinchD0/Math.max(1,d)));
+  }
+  markInteract();
+});
+function endPointer(e){
+  pointers.delete(e.pointerId);
+  if(pointers.size===0)dragging=false;
+  markInteract();
 }
-function clearSpot(){
-  spotlight=null;
-  if(glowSprite)glowSprite.visible=false;
-}
+stage.addEventListener('pointerup',endPointer);
+stage.addEventListener('pointercancel',endPointer);
+stage.addEventListener('wheel',e=>{
+  e.preventDefault();
+  camDist=Math.max(CAM_MIN,Math.min(CAM_MAX,camDist*(1+e.deltaY*0.001)));
+  markInteract();
+},{passive:false});
 
-const clock=new THREE.Clock();
+/* ---------- loop ---------- */
+const easeIO=t=>t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+let prevT=performance.now();
 function tick(){
-  const t=clock.getElapsedTime();
-  if(yawTarget!==null){
-    yaw+=(yawTarget-yaw)*0.085;
-    if(Math.abs(yawTarget-yaw)<0.002)yawTarget=null;
-  }
-  if(pitchTarget!==null){
-    pitch+=(pitchTarget-pitch)*0.085;
-    if(Math.abs(pitchTarget-pitch)<0.002)pitchTarget=null;
-  }
-  if(fovTarget!==null){
-    fov+=(fovTarget-fov)*0.12;
-    camera.fov=fov;camera.updateProjectionMatrix();
-    if(Math.abs(fovTarget-fov)<0.1)fovTarget=null;
-  }
-  if(!dragging&&yawTarget===null){
-    if(Math.abs(yawVel)>0.0002){yaw+=yawVel;yawVel*=0.94;}
-    if(Math.abs(pitchVel)>0.0005){
-      const np=clamp(pitch+pitchVel,-1.45,1.45);
-      if(np!==pitch){pitch=np;pitchVel*=0.94;}else pitchVel=0;
+  const now=performance.now();
+  const dt=Math.min(0.05,(now-prevT)/1000);prevT=now;
+
+  if(fly){
+    fly.t+=dt/1.4;
+    const k=easeIO(Math.min(1,fly.t));
+    yaw=fly.yaw0+fly.dyaw*k;
+    pitch=fly.pitch0+fly.dpitch*k;
+    globeGroup.rotation.set(pitch,yaw,0);
+    if(fly.t>=1)fly=null;
+  }else{
+    if(!dragging){
+      yaw+=vyaw;pitch=Math.max(-PITCH_CLAMP,Math.min(PITCH_CLAMP,pitch+vpitch));
+      vyaw*=0.95;vpitch*=0.95;                       // inertia
+      if(now-lastInteract>4000)yaw+=dt*0.06;          // idle slow spin
     }
+    globeGroup.rotation.set(pitch,yaw,0);
   }
-  camera.rotation.set(pitch,yaw,0);
-  if(spotlight&&glowSprite){
-    const p=1+Math.sin(t*4.5)*0.06;
-    glowSprite.scale.set(6.5*p,7.5*p,1);
-  }
+  placeCamera();
   renderer.render(scene,camera);
 }
+
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+boot().catch(()=>{
+  document.getElementById('loading').style.display='none';
+  document.getElementById('fallback').style.display='flex';
+});
 </script>
 </body>
 </html>
