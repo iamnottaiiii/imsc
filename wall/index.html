@@ -25,7 +25,7 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.5 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
   }
   header {
-    position: sticky; top: 0; z-index: 10;
+    position: sticky; top: 0; z-index: 30;
     padding: 18px 22px 14px;
     background: rgba(176,168,154,.94);
     border-bottom: 3px solid #2b2b2b;
@@ -49,27 +49,41 @@
   }
   #go:active { transform: rotate(0deg) scale(.97); }
   #msg { min-height: 28px; font-size: 20px; margin-top: 8px; color: #9a4a3a; }
-  #scaler { width: 1600px; transform-origin: top left; margin: 0 auto; }
-  #wall { position: relative; width: 1600px; }
+  #dim {
+    position: fixed; inset: 0; z-index: 15;
+    background: rgba(18, 16, 12, 0.88);
+    opacity: 0; pointer-events: none;
+    transition: opacity .45s ease;
+  }
+  body.spotlight #dim { opacity: 1; pointer-events: auto; }
+  #scaler { transform-origin: top left; margin: 0 auto; position: relative; z-index: 1; }
+  #wall { position: relative; }
   .tag {
     position: absolute; white-space: nowrap;
     transform: translate(-50%,-50%) rotate(var(--r));
     color: var(--c); font-size: var(--s);
     line-height: 1; padding: 6px 10px;
   }
+  .tag.found {
+    z-index: 20;
+    color: #f5ecd8;
+    text-shadow: 0 0 14px rgba(245,236,216,.85), 0 0 42px rgba(245,236,216,.45);
+  }
   .tag.found::after {
-    content: ""; position: absolute; inset: -14px -20px;
-    border: 5px solid #9a4a3a; border-radius: 48% 52% 55% 45%;
+    content: ""; position: absolute; inset: -16px -24px;
+    border: 5px solid #e8d9b0; border-radius: 48% 52% 55% 45%;
     transform: rotate(-4deg); pointer-events: none;
+    box-shadow: 0 0 24px rgba(232,217,176,.5);
   }
   footer {
     padding: 30px 22px 60px; font-size: 20px; color: #4a4438;
-    max-width: 700px;
+    max-width: 700px; position: relative; z-index: 1;
   }
   footer a { color: #2b2b2b; }
 </style>
 </head>
 <body>
+<div id="dim"></div>
 <header>
   <h1>the wall</h1>
   <p class="sub">every follower's name, written by hand.</p>
@@ -86,7 +100,7 @@
   <p>imsc.bjvfi.com/wall</p>
 </footer>
 <script>
-const COLS = 5, CELL_W = 320, CELL_H = 150, WALL_W = 1600;
+const CELL_W = 320, CELL_H = 150;
 const COLORS = ["#2b2b2b","#2b2b2b","#2b2b2b","#2b2b2b","#9a4a3a","#4a6e6e"];
 
 function hashStr(s) {
@@ -98,16 +112,26 @@ function rnd(seed) {
   let s = seed >>> 0;
   return function() { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
 }
+function colsFor() {
+  const w = document.documentElement.clientWidth;
+  return w >= 1100 ? 5 : w >= 700 ? 3 : 2;
+}
 
 const wall = document.getElementById("wall");
-const tags = [];
+const scaler = document.getElementById("scaler");
+let users = [];
+let curCols = 0;
 
-fetch("followers.json").then(r => r.json()).then(users => {
-  document.getElementById("count").textContent = users.length;
-  const rows = Math.ceil(users.length / COLS);
+function layout() {
+  const cols = colsFor();
+  const wallW = cols * CELL_W;
+  wall.style.width = wallW + "px";
+  scaler.style.width = wallW + "px";
+  wall.innerHTML = "";
+  const rows = Math.ceil(users.length / cols);
   wall.style.height = (rows * CELL_H) + "px";
   users.forEach((u, i) => {
-    const row = Math.floor(i / COLS), col = i % COLS;
+    const row = Math.floor(i / cols), col = i % cols;
     const r = rnd(hashStr(u.username + ":" + i));
     const jx = (r() - .5) * 60, jy = (r() - .5) * 44;
     const rot = ((r() - .5) * 16).toFixed(1) + "deg";
@@ -116,42 +140,59 @@ fetch("followers.json").then(r => r.json()).then(users => {
     const el = document.createElement("div");
     el.className = "tag";
     el.textContent = "@" + u.username;
-    el.style.left = (col * CELL_W + CELL_W / 2 + jx) / WALL_W * 100 + "%";
+    el.dataset.name = u.username.toLowerCase();
+    el.style.left = (col * CELL_W + CELL_W / 2 + jx) / wallW * 100 + "%";
     el.style.top = (row * CELL_H + CELL_H / 2 + jy) + "px";
     el.style.setProperty("--r", rot);
     el.style.setProperty("--c", color);
     el.style.setProperty("--s", size + "px");
     wall.appendChild(el);
-    tags.push({ name: u.username.toLowerCase(), el });
   });
+  curCols = cols;
   fit();
-});
+  clearSpotlight();
+}
 
 function fit() {
-  const s = Math.min(1, document.documentElement.clientWidth / 1600);
-  const scaler = document.getElementById("scaler");
+  const wallW = curCols * CELL_W;
+  const s = Math.min(1, document.documentElement.clientWidth / wallW);
   scaler.style.transform = "scale(" + s + ")";
   scaler.style.height = (wall.offsetHeight * s) + "px";
 }
-window.addEventListener("resize", fit);
+window.addEventListener("resize", () => {
+  if (colsFor() !== curCols) layout(); else fit();
+});
 
+fetch("followers.json").then(r => r.json()).then(data => {
+  users = data;
+  document.getElementById("count").textContent = users.length;
+  layout();
+});
+
+function clearSpotlight() {
+  document.body.classList.remove("spotlight");
+  document.querySelectorAll(".tag.found").forEach(e => e.classList.remove("found"));
+}
 function find() {
   const msg = document.getElementById("msg");
   const q = document.getElementById("q").value.trim().replace(/^@/, "").toLowerCase();
-  document.querySelectorAll(".tag.found").forEach(e => e.classList.remove("found"));
+  clearSpotlight();
   if (!q) { msg.textContent = ""; return; }
-  const hit = tags.find(t => t.name === q);
+  const hit = [...wall.children].find(e => e.dataset.name === q);
   if (hit) {
     msg.textContent = "";
-    hit.el.classList.add("found");
-    hit.el.scrollIntoView({ block: "center", behavior: "smooth" });
-    setTimeout(() => hit.el.classList.remove("found"), 4000);
+    document.body.classList.add("spotlight");
+    hit.classList.add("found");
+    setTimeout(() => hit.scrollIntoView({ block: "center", behavior: "smooth" }), 60);
   } else {
     msg.textContent = "not on the wall yet. follow @idk_cool_i_guess and it will be.";
   }
 }
 document.getElementById("go").addEventListener("click", find);
 document.getElementById("q").addEventListener("keydown", e => { if (e.key === "Enter") find(); });
+document.getElementById("q").addEventListener("input", e => { if (!e.target.value) clearSpotlight(); });
+document.getElementById("dim").addEventListener("click", clearSpotlight);
+document.addEventListener("keydown", e => { if (e.key === "Escape") clearSpotlight(); });
 </script>
 </body>
 </html>
